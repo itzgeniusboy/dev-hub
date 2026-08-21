@@ -22,7 +22,8 @@ function wordmark(pad = "") {
   return logo.left.map((line, index) => {
     const left = draw(line, dim, "\x1b[38;5;235m", "\x1b[48;5;235m")
     const right = draw(logo.right[index] ?? "", reset, "\x1b[38;5;238m", "\x1b[48;5;238m")
-    return `${pad}${left}  ${right}`
+    const separator = index === 2 ? "-" : "  "
+    return `${pad}${left}${separator}${right}`
   })
 }
 
