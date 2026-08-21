@@ -1,7 +1,7 @@
 import { RGBA, TextAttributes } from "@opentui/core"
 import { For, type JSX } from "solid-js"
 import { tint, useTheme } from "../context/theme"
-import { logo } from "../logo"
+import { logo, logoGap } from "../logo"
 
 export function Logo() {
   const { theme } = useTheme()
@@ -50,13 +50,11 @@ export function Logo() {
     <box>
       <For each={logo.left}>
         {(line, index) => (
-          <box flexDirection="row" gap={index() === 2 ? 0 : 1}>
+          <box flexDirection="row">
             <box flexDirection="row">{renderLine(line, theme.textMuted, false)}</box>
-            {index() === 2 && (
-              <text fg={theme.text} attributes={TextAttributes.BOLD} selectable={false}>
-                -
-              </text>
-            )}
+            <text fg={theme.background} bg={theme.background} selectable={false}>
+              {logoGap}
+            </text>
             <box flexDirection="row">{renderLine(logo.right[index()], theme.text, true)}</box>
           </box>
         )}
