@@ -1,30 +1,42 @@
 import { TextAttributes } from "@opentui/core"
 import { useTheme } from "../context/theme"
-import { wordmark } from "../logo"
-
-const [wordmarkLeft, wordmarkRight] = wordmark.split(" ")
 
 export function Logo() {
   const { theme } = useTheme()
 
   return (
-    <box flexDirection="column">
+    <box flexDirection="column" alignItems="center">
       <text fg={theme.background} selectable={false}>
         {" "}
       </text>
+      <text fg={theme.textMuted} selectable={false}>
+        {"       ◇      ◇      ◇"}
+      </text>
+      <text fg={theme.borderSubtle} selectable={false}>
+        {"       │      │      │"}
+      </text>
+      <text fg={theme.borderActive} selectable={false}>
+        {"   ╭──────┬──────┬──────╮"}
+      </text>
       <box flexDirection="row">
-        <text fg={theme.textMuted} selectable={false}>
-          {wordmarkLeft}
+        <text fg={theme.borderActive}>│</text>
+        <text fg={theme.info}> PLAN  </text>
+        <text fg={theme.borderActive}>│</text>
+        <text fg={theme.primary} attributes={TextAttributes.BOLD}>
+          BUILD 
         </text>
-        <text fg={theme.background} selectable={false}>
-          {" "}
-        </text>
-        <text fg={theme.text} attributes={TextAttributes.BOLD} selectable={false}>
-          {wordmarkRight}
-        </text>
+        <text fg={theme.borderActive}>│</text>
+        <text fg={theme.success}> CHECK </text>
+        <text fg={theme.borderActive}>│</text>
       </box>
-      <text fg={theme.background} selectable={false}>
-        {" "}
+      <text fg={theme.borderActive} selectable={false}>
+        {"   ╰──────┴──────┴──────╯"}
+      </text>
+      <text fg={theme.accent} attributes={TextAttributes.BOLD} selectable={false}>
+        {"        ◉  POWER CORE"}
+      </text>
+      <text fg={theme.textMuted} selectable={false}>
+        {"     MULTI-AGENT GRID ONLINE"}
       </text>
       <text fg={theme.background} selectable={false}>
         {" "}
@@ -32,3 +44,4 @@ export function Logo() {
     </box>
   )
 }
+
