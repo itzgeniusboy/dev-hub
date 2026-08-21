@@ -26,11 +26,21 @@ import { createNexusClient, type NexusClient, type ToolPart } from "@nexus-ai/sd
 import { FormatError, FormatUnknownError } from "../error"
 import { INTERACTIVE_INPUT_ERROR, resolveInteractiveStdin } from "./run/runtime.stdin"
 import { modelWarning } from "@/provider/rotation"
+import { isKnownModelAlias, routeModel } from "@/api/ModelRouter"
 
 type ModelInput = Parameters<NexusClient["session"]["prompt"]>[0]["model"]
 
 function pick(value: string | undefined): ModelInput | undefined {
   if (!value) return undefined
+  if (isKnownModelAlias(value)) {
+    const route = routeModel(value, { includeLocal: false })[0]
+    if (route) {
+      return {
+        providerID: route.provider,
+        modelID: route.model,
+      } as ModelInput
+    }
+  }
   const [providerID, ...rest] = value.split("/")
   return {
     providerID,

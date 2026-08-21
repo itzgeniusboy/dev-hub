@@ -34,6 +34,7 @@ import { SetupCommand } from "./cli/cmd/setup"
 import { ConfigCommand } from "./cli/cmd/config"
 import { DevCommand } from "./cli/cmd/dev"
 import { LiaisonCommand } from "./cli/cmd/liaison"
+import { ApiCommand } from "./cli/cmd/api"
 import { Heap } from "./cli/heap"
 
 const args = hideBin(process.argv)
@@ -113,6 +114,7 @@ const cli = yargs(args)
   .command(ConfigCommand)
   .command(DevCommand)
   .command(LiaisonCommand)
+  .command(ApiCommand)
   .fail((msg, err) => {
     if (
       msg?.startsWith("Unknown argument") ||

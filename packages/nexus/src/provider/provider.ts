@@ -38,6 +38,25 @@ import {
   configuredProviderKeys,
   modelForProvider,
 } from "./rotation"
+import { apiVaultKeyEntries, getApiVaultStatus } from "../api/ApiVault"
+
+function mergeApiVaultKeys(configured: unknown): Record<string, string[]> {
+  const result: Record<string, string[]> = {}
+  if (configured && typeof configured === "object" && !Array.isArray(configured)) {
+    for (const [provider, values] of Object.entries(configured as Record<string, unknown>)) {
+      if (Array.isArray(values)) {
+        result[provider] = values.filter(
+          (value): value is string => typeof value === "string" && value.trim().length > 0,
+        )
+      }
+    }
+  }
+  for (const { provider, entry } of apiVaultKeyEntries()) {
+    const keys = result[provider] ?? []
+    if (!keys.includes(entry.key)) result[provider] = [...keys, entry.key]
+  }
+  return result
+}
 
 const OPENAI_HEADER_TIMEOUT_DEFAULT = 300_000
 
@@ -1440,7 +1459,8 @@ const layer = Layer.effect(
       Effect.gen(function* () {
         const bridge = yield* EffectBridge.make()
         const cfg = yield* config.get()
-        const rotation = new RotationEngine(cfg.api_keys ?? {}, cfg.rotation !== false)
+        const effectiveApiKeys = mergeApiVaultKeys(cfg.api_keys)
+        const rotation = new RotationEngine(effectiveApiKeys, cfg.rotation !== false && getApiVaultStatus().autoRotate)
         const modelsDev = yield* modelsDevSvc.get()
         const catalog = mapValues(modelsDev, fromModelsDevProvider)
         const database = mapValues(catalog, toPublicInfo)
@@ -2068,6 +2088,7 @@ const layer = Layer.effect(
 
     const defaultModel = Effect.fn("Provider.defaultModel")(function* () {
       const cfg = yield* config.get()
+      const effectiveApiKeys = mergeApiVaultKeys(cfg.api_keys)
       const s = yield* InstanceState.get(state)
       if (cfg.model) {
         const configured = parseModel(cfg.model)
@@ -2113,7 +2134,7 @@ const layer = Layer.effect(
             Boolean(p.key) ||
             p.source === "env" ||
             p.source === "api" ||
-            configuredProviderKeys(cfg.api_keys, p.id).length > 0,
+            configuredProviderKeys(effectiveApiKeys, p.id).length > 0,
         )
         .sort((a, b) => providerPriority(a.id) - providerPriority(b.id) || a.id.localeCompare(b.id))
       const provider = candidates[0]
@@ -2135,6 +2156,7 @@ const layer = Layer.effect(
 
     const fallbackModels = Effect.fn("Provider.fallbackModels")(function* (excludeProviderID: ProviderV2.ID) {
       const cfg = yield* config.get()
+      const effectiveApiKeys = mergeApiVaultKeys(cfg.api_keys)
       const s = yield* InstanceState.get(state)
       const configured = Object.keys(cfg.provider ?? {})
       return Object.values(s.providers)
@@ -2148,7 +2170,7 @@ const layer = Layer.effect(
             Boolean(p.key) ||
             p.source === "env" ||
             p.source === "api" ||
-            configuredProviderKeys(cfg.api_keys, p.id).length > 0,
+            configuredProviderKeys(effectiveApiKeys, p.id).length > 0,
         )
         .sort((a, b) => providerPriority(a.id) - providerPriority(b.id) || a.id.localeCompare(b.id))
         .flatMap((p) => {
