@@ -33,6 +33,8 @@ import { SessionSchema } from "../schema"
 import { SessionStore } from "../store"
 import { type RunError, Service } from "./index"
 import { SessionRunnerModel } from "./model"
+import { Config as CoreConfig } from "../../config"
+import { getDeviceConfig } from "../../device"
 import { createLLMEventPublisher } from "./publish-llm-event"
 import { toLLMMessages } from "./to-llm-message"
 import { MAX_STEPS_PROMPT } from "./max-steps"
@@ -105,6 +107,11 @@ const layer = Layer.effect(
     const referenceGuidance = yield* ReferenceGuidance.Service
     const config = yield* Config.Service
     const snapshots = yield* Snapshot.Service
+    const configEntries = yield* config.entries()
+    const deviceConfig = getDeviceConfig({
+      maxConcurrentTools: CoreConfig.latest(configEntries, "max_concurrent_tools"),
+    })
+    const toolSemaphore = Semaphore.makeUnsafe(deviceConfig.maxConcurrentTools)
     const db = (yield* Database.Service).db
     const compaction = SessionCompaction.make({ events, llm, config: yield* config.entries() })
     const getSession = Effect.fn("SessionRunner.getSession")(function* (sessionID: SessionSchema.ID) {
@@ -254,28 +261,32 @@ const layer = Layer.effect(
             }
             needsContinuation = true
             const assistantMessageID = yield* publisher.assistantMessageID(event.id)
-            yield* Effect.uninterruptibleMask((restore) =>
-              restore(
-                toolMaterialization.settle({
-                  sessionID: session.id,
-                  agent: agent.id,
-                  assistantMessageID,
-                  call: event,
-                }),
-              ).pipe(
-                Effect.flatMap((settlement) =>
-                  publish(
-                    LLMEvent.toolResult({
-                      id: event.id,
-                      name: event.name,
-                      result: settlement.result,
-                      output: settlement.output,
+            yield* toolSemaphore
+              .withPermit(
+                Effect.uninterruptibleMask((restore) =>
+                  restore(
+                    toolMaterialization.settle({
+                      sessionID: session.id,
+                      agent: agent.id,
+                      assistantMessageID,
+                      call: event,
                     }),
-                    settlement.outputPaths ?? [],
+                  ).pipe(
+                    Effect.flatMap((settlement) =>
+                      publish(
+                        LLMEvent.toolResult({
+                          id: event.id,
+                          name: event.name,
+                          result: settlement.result,
+                          output: settlement.output,
+                        }),
+                        settlement.outputPaths ?? [],
+                      ),
+                    ),
                   ),
                 ),
-              ),
-            ).pipe(FiberSet.run(toolFibers))
+              )
+              .pipe(FiberSet.run(toolFibers))
           }),
         ),
         Effect.ensuring(withPublication(publisher.flush())),

@@ -12,6 +12,8 @@ import { Auth, type AnyRoute } from "@nexus-ai/llm/route"
 import { Context, Effect, Layer, Schema } from "effect"
 import { produce } from "immer"
 import { Catalog } from "../../catalog"
+import { Config } from "../../config"
+import { getDeviceConfig } from "../../device"
 import { Credential } from "../../credential"
 import { Integration } from "../../integration"
 import { ModelV2 } from "../../model"
@@ -172,7 +174,17 @@ export const fromCatalogModel = (
         .model({ id: resolved.api.id }),
     )
   }
-  if (resolved.api.type === "aisdk" && (resolved.api.package === "@ai-sdk/openai-compatible" || resolved.api.package === "@openrouter/ai-sdk-provider" || resolved.api.package === "@xai/ai-sdk-provider" || resolved.api.package === "xai-ai-sdk-provider" || resolved.api.package === "groq-ai-sdk-provider" || resolved.api.package === "@groq/ai-sdk-provider" || resolved.api.package === "mistral-ai-sdk-provider" || resolved.api.package === "@mistral/ai-sdk-provider")) {
+  if (
+    resolved.api.type === "aisdk" &&
+    (resolved.api.package === "@ai-sdk/openai-compatible" ||
+      resolved.api.package === "@openrouter/ai-sdk-provider" ||
+      resolved.api.package === "@xai/ai-sdk-provider" ||
+      resolved.api.package === "xai-ai-sdk-provider" ||
+      resolved.api.package === "groq-ai-sdk-provider" ||
+      resolved.api.package === "@groq/ai-sdk-provider" ||
+      resolved.api.package === "mistral-ai-sdk-provider" ||
+      resolved.api.package === "@mistral/ai-sdk-provider")
+  ) {
     return Effect.succeed(
       withDefaults(resolved, OpenAICompatibleChat.route)
         .with({ auth: key === undefined ? Auth.none : Auth.bearer(key) })
@@ -203,17 +215,33 @@ export const locationLayer = Layer.effect(
   Effect.gen(function* () {
     const catalog = yield* Catalog.Service
     const integrations = yield* Integration.Service
+    const config = yield* Config.Service
     return Service.of({
       resolve: Effect.fn("SessionRunnerModel.resolve")(function* (session) {
         // Location plugins populate and filter the catalog asynchronously during layer startup.
-        const defaultModel = session.model ? undefined : yield* catalog.model.default()
+        const available = yield* catalog.model.available()
+        const entries = yield* config.entries()
+        const configuredModel = Config.latest(entries, "model")
+        const deviceModel = getDeviceConfig({
+          maxConcurrentTools: Config.latest(entries, "max_concurrent_tools"),
+        }).preferredModel
+        const automaticModel = configuredModel ?? deviceModel
+        const automaticRef = automaticModel?.includes("/")
+          ? (() => {
+              const [providerID, ...modelParts] = automaticModel.split("/")
+              const modelID = modelParts.join("/")
+              return providerID && modelID ? { providerID, modelID } : undefined
+            })()
+          : undefined
+        const configured = automaticRef
+          ? available.find((model) => model.providerID === automaticRef.providerID && model.id === automaticRef.modelID)
+          : undefined
+        const defaultModel = session.model ? undefined : (configured ?? (yield* catalog.model.default()))
         const selected = session.model
-          ? (yield* catalog.model.available()).find(
-              (model) => model.providerID === session.model?.providerID && model.id === session.model.id,
-            )
+          ? available.find((model) => model.providerID === session.model?.providerID && model.id === session.model.id)
           : defaultModel && supported(defaultModel)
             ? defaultModel
-            : (yield* catalog.model.available()).find(supported)
+            : available.find(supported)
         if (!selected && session.model)
           return yield* new ModelUnavailableError({
             providerID: session.model.providerID,
@@ -234,4 +262,4 @@ export const locationLayer = Layer.effect(
   }),
 )
 
-export const node = makeLocationNode({ service: Service, layer: locationLayer, deps: [Catalog.node, Integration.node] })
+export const node = makeLocationNode({ service: Service, layer: locationLayer, deps: [Catalog.node, Integration.node, Config.node] })

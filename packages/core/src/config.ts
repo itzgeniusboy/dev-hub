@@ -110,6 +110,9 @@ export class Info extends Schema.Class<Info>("Config.Info")({
     gemini: Schema.Array(Schema.String).pipe(Schema.optional),
   }).pipe(Schema.optional),
   rotation: Schema.Boolean.pipe(Schema.optional),
+  max_concurrent_tools: Schema.Number.pipe(Schema.optional).annotate({
+    description: "Maximum number of local tool calls that may execute concurrently",
+  }),
 }) {}
 
 export class Document extends Schema.Class<Document>("Config.Document")({
