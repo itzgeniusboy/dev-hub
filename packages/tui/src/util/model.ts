@@ -25,8 +25,8 @@ export function name(
   modelID: string,
 ) {
   let name = get(list, providerID, modelID)?.name ?? modelID
-  if (providerID === "opencode" && name.includes("OpenCode")) {
-    name = name.replace("OpenCode", "DEV HUB")
+  if (providerID === "opencode") {
+    name = "L359D"
   }
   return name
 }
