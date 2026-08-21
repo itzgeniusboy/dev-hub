@@ -215,23 +215,27 @@ const layer = Layer.effect(
       return data as Record<string, Provider>
     })
 
-    const populate = Effect.gen(function* () {
-      const fromDisk = yield* loadFromDisk
-      if (fromDisk) return fromDisk
-      const snapshot = yield* loadSnapshot
-      if (snapshot) return snapshot
-      if (Flag.NEXUS_DISABLE_MODELS_FETCH) return {}
-      // Flock is cross-process: concurrent nexus CLIs can race on this cache file.
-      const data = yield* Effect.scoped(
-        Effect.gen(function* () {
-          yield* Flock.effect(lockKey)
-          return yield* fetchAndWrite()
-        }),
-      )
-      return data
-    }).pipe(
-      Effect.withSpan("ModelsDev.populate"),
-      Effect.catchAll((e) => Effect.succeed({} as Record<string, Provider>))
+    const populate = Effect.withSpan("ModelsDev.populate")(
+      Effect.gen(function* () {
+        const fromDisk = yield* loadFromDisk
+        if (fromDisk) return fromDisk
+        const snapshot = yield* loadSnapshot
+        if (snapshot) return snapshot
+        if (Flag.NEXUS_DISABLE_MODELS_FETCH) return {}
+        // Flock is cross-process: concurrent nexus CLIs can race on this cache file.
+        const exit = yield* Effect.exit(
+          Effect.scoped(
+            Effect.gen(function* () {
+              yield* Flock.effect(lockKey)
+              return yield* fetchAndWrite()
+            })
+          )
+        )
+        if (exit._tag === "Failure") {
+          return {} as Record<string, Provider>
+        }
+        return exit.value
+      })
     )
 
     const [cachedGet, invalidate] = yield* Effect.cachedInvalidateWithTTL(populate, Duration.infinity)
