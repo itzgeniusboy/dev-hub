@@ -244,7 +244,8 @@ if (Script.release) {
       await $`zip -r ../../${key}.zip *`.cwd(`dist/${key}/bin`)
     }
   }
-  await $`gh release upload v${Script.version} ./dist/*.zip ./dist/*.tar.gz --clobber --repo ${process.env.GH_REPO}`
+  const releaseFiles = Object.keys(binaries).map((key) => (key.includes("linux") ? `./dist/${key}.tar.gz` : `./dist/${key}.zip`))
+  await $`gh release upload v${Script.version} ${releaseFiles} --clobber --repo ${process.env.GH_REPO}`
 }
 
 export { binaries }
