@@ -1,5 +1,5 @@
 <p align="center">
-  <a href="https://opencode.ai">
+  <a href="https://github.com/itzgeniusboy/dev-hub">
     <picture>
       <source srcset="packages/console/app/src/asset/logo-ornate-dark.svg" media="(prefers-color-scheme: dark)">
       <source srcset="packages/console/app/src/asset/logo-ornate-light.svg" media="(prefers-color-scheme: light)">
@@ -9,9 +9,9 @@
 </p>
 <p align="center">The open source AI coding agent.</p>
 <p align="center">
-  <a href="https://opencode.ai/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
-  <a href="https://www.npmjs.com/package/opencode-ai"><img alt="npm" src="https://img.shields.io/npm/v/opencode-ai?style=flat-square" /></a>
-  <a href="https://github.com/anomalyco/opencode/actions/workflows/publish.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/anomalyco/opencode/publish.yml?style=flat-square&branch=dev" /></a>
+  <a href="https://github.com/itzgeniusboy/dev-hub/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
+  <a href="https://www.npmjs.com/package/dev-hub-ai"><img alt="npm" src="https://img.shields.io/npm/v/dev-hub-ai?style=flat-square" /></a>
+  <a href="https://github.com/itzgeniusboy/dev-hub/actions/workflows/publish.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/itzgeniusboy/dev-hub/publish.yml?style=flat-square&branch=dev" /></a>
 </p>
 
 <p align="center">
@@ -39,7 +39,7 @@
   <a href="README.vi.md">Tiếng Việt</a>
 </p>
 
-[![Dev Hub Terminal UI](packages/web/src/assets/lander/screenshot.png)](https://opencode.ai)
+[![Dev Hub Terminal UI](packages/web/src/assets/lander/screenshot.png)](https://github.com/itzgeniusboy/dev-hub)
 
 ---
 
@@ -47,18 +47,18 @@
 
 ```bash
 # YOLO
-curl -fsSL https://opencode.ai/install | bash
+curl -fsSL https://github.com/itzgeniusboy/dev-hub/releases | bash
 
 # Package managers
-npm i -g opencode-ai@latest        # or bun/pnpm/yarn
+npm i -g dev-hub-ai@latest        # or bun/pnpm/yarn
 scoop install dev-hub             # Windows
 choco install dev-hub             # Windows
-brew install anomalyco/tap/opencode # macOS and Linux (recommended, always up to date)
+brew install itzgeniusboy/dev-hub # macOS and Linux (recommended, always up to date)
 brew install dev-hub              # macOS and Linux (official brew formula, updated less)
 sudo pacman -S dev-hub            # Arch Linux (Stable)
-paru -S opencode-bin               # Arch Linux (Latest from AUR)
+paru -S dev-hub-bin               # Arch Linux (Latest from AUR)
 mise use -g dev-hub               # Any OS
-nix run nixpkgs#dev-hub           # or github:anomalyco/opencode for latest dev branch
+nix run nixpkgs#dev-hub           # or github:itzgeniusboy/dev-hub for latest dev branch
 ```
 
 > [!TIP]
@@ -66,13 +66,13 @@ nix run nixpkgs#dev-hub           # or github:anomalyco/opencode for latest dev 
 
 ### Desktop App (BETA)
 
-Dev Hub is also available as a desktop application. Download directly from the [releases page](https://github.com/anomalyco/opencode/releases) or [opencode.ai/download](https://opencode.ai/download).
+Dev Hub is also available as a desktop application. Download directly from the [releases page](https://github.com/itzgeniusboy/dev-hub/releases) or [dev-hub/download](https://github.com/itzgeniusboy/dev-hub/releases).
 
 | Platform              | Download                           |
 | --------------------- | ---------------------------------- |
-| macOS (Apple Silicon) | `opencode-desktop-mac-arm64.dmg`   |
-| macOS (Intel)         | `opencode-desktop-mac-x64.dmg`     |
-| Windows               | `opencode-desktop-windows-x64.exe` |
+| macOS (Apple Silicon) | `dev-hub-desktop-mac-arm64.dmg`   |
+| macOS (Intel)         | `dev-hub-desktop-mac-x64.dmg`     |
+| Windows               | `dev-hub-desktop-windows-x64.exe` |
 | Linux                 | `.deb`, `.rpm`, or `.AppImage`     |
 
 ```bash
@@ -86,15 +86,15 @@ scoop bucket add extras; scoop install extras/opencode-desktop
 
 The install script respects the following priority order for the installation path:
 
-1. `$OPENCODE_INSTALL_DIR` - Custom installation directory
+1. `$DEV_HUB_INSTALL_DIR` - Custom installation directory
 2. `$XDG_BIN_DIR` - XDG Base Directory Specification compliant path
 3. `$HOME/bin` - Standard user binary directory (if it exists or can be created)
-4. `$HOME/.opencode/bin` - Default fallback
+4. `$HOME/.dev-hub/bin` - Default fallback
 
 ```bash
 # Examples
-OPENCODE_INSTALL_DIR=/usr/local/bin curl -fsSL https://opencode.ai/install | bash
-XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://opencode.ai/install | bash
+DEV_HUB_INSTALL_DIR=/usr/local/bin curl -fsSL https://github.com/itzgeniusboy/dev-hub/releases | bash
+XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://github.com/itzgeniusboy/dev-hub/releases | bash
 ```
 
 ### Agents
@@ -110,11 +110,11 @@ Dev Hub includes two built-in agents you can switch between with the `Tab` key.
 Also included is a **general** subagent for complex searches and multistep tasks.
 This is used internally and can be invoked using `@general` in messages.
 
-Learn more about [agents](https://opencode.ai/docs/agents).
+Learn more about [agents](https://github.com/itzgeniusboy/dev-hub#readme/agents).
 
 ### Documentation
 
-For more info on how to configure Dev Hub, [**head over to our docs**](https://opencode.ai/docs).
+For more info on how to configure Dev Hub, [**head over to our docs**](https://github.com/itzgeniusboy/dev-hub#readme).
 
 ### Contributing
 
@@ -126,4 +126,4 @@ If you are working on a project that's related to Dev Hub and is using "dev-hub"
 
 ---
 
-**Join our community** [Discord](https://discord.gg/opencode) | [X.com](https://x.com/opencode)
+**Join our community** [Discord](https://github.com/itzgeniusboy/dev-hub) | [X.com](https://github.com/itzgeniusboy/dev-hub)
