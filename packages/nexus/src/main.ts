@@ -32,6 +32,8 @@ import { errorMessage } from "./util/error"
 import { PluginCommand } from "./cli/cmd/plug"
 import { SetupCommand } from "./cli/cmd/setup"
 import { ConfigCommand } from "./cli/cmd/config"
+import { DevCommand } from "./cli/cmd/dev"
+import { LiaisonCommand } from "./cli/cmd/liaison"
 import { Heap } from "./cli/heap"
 
 const args = hideBin(process.argv)
@@ -109,6 +111,8 @@ const cli = yargs(args)
   .command(DbCommand)
   .command(SetupCommand)
   .command(ConfigCommand)
+  .command(DevCommand)
+  .command(LiaisonCommand)
   .fail((msg, err) => {
     if (
       msg?.startsWith("Unknown argument") ||
