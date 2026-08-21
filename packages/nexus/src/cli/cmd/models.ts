@@ -8,6 +8,7 @@ import { ProviderV2 } from "@nexus-ai/core/provider"
 import { cmd } from "./cmd"
 import * as Prompt from "../effect/prompt"
 import { Config } from "@/config/config"
+import { modelForProvider } from "@/provider/rotation"
 
 export const ModelsListCommand = effectCmd({
   command: "list [provider]",
@@ -90,7 +91,7 @@ export const ModelsTestCommand = effectCmd({
     }
 
     const testPrompt = "Reply with exactly OK"
-    const providersToTest = ["ollama", "groq", "openrouter", "openai", "opencode", ...configured]
+    const providersToTest = ["groq", "openrouter", "google", "ollama", "openai", "opencode", ...configured]
     const tested = new Set<string>()
 
     for (const pid of providersToTest) {
@@ -100,10 +101,9 @@ export const ModelsTestCommand = effectCmd({
       const provider = yield* s.getProvider(ProviderV2.ID.make(pid))
       if (!provider) continue
 
-      const models = Provider.sort(Object.values(provider.models))
-      if (models.length === 0) continue
-
-      const model = models[0]
+      const preferredID = modelForProvider(pid, provider.models)
+      const model = preferredID ? provider.models[preferredID] : Provider.sort(Object.values(provider.models))[0]
+      if (!model) continue
       const label = `${pid}/${model.id}`
       const spinner = Prompt.spinner()
       yield* spinner.start(`Testing ${label}...`)

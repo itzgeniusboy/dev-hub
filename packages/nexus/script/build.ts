@@ -14,7 +14,7 @@ process.chdir(dir)
 
 const generated = await import("./generate.ts")
 
-import { Script } from "@nexus/script"
+import { Script } from "@nexus-ai/script"
 import pkg from "../package.json"
 
 const singleFlag = process.argv.includes("--single")

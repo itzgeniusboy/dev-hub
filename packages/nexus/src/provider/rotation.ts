@@ -32,7 +32,34 @@ export class RotationEngine {
   }
 }
 
-export const PROVIDER_FALLBACK_ORDER = ["ollama", "groq", "openrouter", "google", "openai", "opencode"] as const
+export const PROVIDER_FALLBACK_ORDER = ["groq", "openrouter", "google", "ollama", "openai", "opencode"] as const
+
+/** Canonical low-cost/free model order used by setup, default selection, and model tests. */
+export const PREFERRED_MODELS = {
+  groq: ["llama-3.1-8b-instant", "llama-3.3-70b-versatile", "mixtral-8x7b-32768"],
+  openrouter: [
+    "meta-llama/llama-3.1-8b-instruct:free",
+    "google/gemma-2b-it:free",
+    "mistralai/mistral-7b-instruct:free",
+  ],
+  google: ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.5-flash-8b"],
+} as const
+
+export type PreferredProvider = keyof typeof PREFERRED_MODELS
+
+export function preferredModelForProvider(providerID: string, models: Record<string, unknown>): string | undefined {
+  const preferred = PREFERRED_MODELS[providerID as PreferredProvider]
+  if (preferred) {
+    const catalogKeys = Object.keys(models)
+    for (const id of preferred) {
+      if (models[id] !== undefined) return id
+      // Fallback: match catalog keys that start with the preferred ID or vice-versa
+      const partialMatch = catalogKeys.find((k) => id.startsWith(k) || k.startsWith(id) || k.includes(id.split(":")[0]))
+      if (partialMatch) return partialMatch
+    }
+  }
+  return undefined
+}
 
 export function providerPriority(providerID: string): number {
   const index = PROVIDER_FALLBACK_ORDER.indexOf(providerID as (typeof PROVIDER_FALLBACK_ORDER)[number])
@@ -77,6 +104,8 @@ export function providerFromEnvKey(key: string): string | undefined {
 
 export function modelForProvider(providerID: string, models: Record<string, unknown>): string | undefined {
   const ids = Object.keys(models)
+  const preferred = preferredModelForProvider(providerID, models)
+  if (preferred) return preferred
   if (providerID === "ollama") return ids.find((id) => /qwen2\.5-coder|llama3|phi3/i.test(id)) ?? ids[0]
   if (providerID === "groq") return ids.find((id) => /llama|mixtral/i.test(id)) ?? ids[0]
   if (providerID === "openrouter") return ids.find((id) => /free/i.test(id)) ?? ids[0]

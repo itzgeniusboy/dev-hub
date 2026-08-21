@@ -5,22 +5,41 @@ import * as Prompt from "../effect/prompt"
 import { Effect, Option } from "effect"
 import { Process } from "@/util/process"
 import { readNexusConfig, writeNexusConfig } from "./config"
+import { PREFERRED_MODELS } from "@/provider/rotation"
+
+function freeModelDefinitions(provider: keyof typeof PREFERRED_MODELS) {
+  return Object.fromEntries(
+    PREFERRED_MODELS[provider].map((id) => [
+      id,
+      {
+        id,
+        name: id,
+        reasoning: false,
+        tool_call: true,
+        modalities: { input: ["text"], output: ["text"] },
+      },
+    ]),
+  )
+}
 
 const PROVIDER_DEFINITIONS = {
   groq: {
     name: "Groq",
     api: "https://api.groq.com/openai/v1",
     npm: "@ai-sdk/openai-compatible",
+    models: freeModelDefinitions("groq"),
   },
   openrouter: {
     name: "OpenRouter",
     api: "https://openrouter.ai/api/v1",
     npm: "@ai-sdk/openai-compatible",
+    models: freeModelDefinitions("openrouter"),
   },
   google: {
     name: "Gemini",
     api: "https://generativelanguage.googleapis.com/v1beta/openai",
     npm: "@ai-sdk/openai-compatible",
+    models: freeModelDefinitions("google"),
   },
 } as const
 
@@ -187,6 +206,16 @@ export const SetupFreeCommand = effectCmd({
     cfg.api_keys = current
     cfg.rotation = true
     cfg.provider = provider
+
+    const preferredProvider = (["groq", "openrouter", "google"] as const).find((id) => {
+      const storageName = id === "google" ? "gemini" : id
+      return (current[storageName] ?? []).length > 0
+    })
+    if (preferredProvider) {
+      cfg.model = `${preferredProvider}/${PREFERRED_MODELS[preferredProvider][0]}`
+    } else if (typeof cfg.model === "string" && /^(groq|openrouter|google)\//.test(cfg.model)) {
+      delete cfg.model
+    }
     writeNexusConfig(configPath, cfg)
 
     if (valid > 0) {
