@@ -5,74 +5,74 @@ export function truthy(key: string) {
   return value === "true" || value === "1"
 }
 
-const copy = process.env["OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT"]
-const fff = process.env["OPENCODE_DISABLE_FFF"]
+const copy = process.env["NEXUS_EXPERIMENTAL_DISABLE_COPY_ON_SELECT"]
+const fff = process.env["NEXUS_DISABLE_FFF"]
 
 function enabledByExperimental(key: string) {
-  return process.env[key] === undefined ? truthy("OPENCODE_EXPERIMENTAL") : truthy(key)
+  return process.env[key] === undefined ? truthy("NEXUS_EXPERIMENTAL") : truthy(key)
 }
 
 export const Flag = {
   OTEL_EXPORTER_OTLP_ENDPOINT: process.env["OTEL_EXPORTER_OTLP_ENDPOINT"],
   OTEL_EXPORTER_OTLP_HEADERS: process.env["OTEL_EXPORTER_OTLP_HEADERS"],
 
-  OPENCODE_AUTO_HEAP_SNAPSHOT: truthy("OPENCODE_AUTO_HEAP_SNAPSHOT"),
-  OPENCODE_GIT_BASH_PATH: process.env["OPENCODE_GIT_BASH_PATH"],
-  OPENCODE_CONFIG: process.env["OPENCODE_CONFIG"],
-  OPENCODE_CONFIG_CONTENT: process.env["OPENCODE_CONFIG_CONTENT"],
-  OPENCODE_DISABLE_AUTOUPDATE: truthy("OPENCODE_DISABLE_AUTOUPDATE"),
-  OPENCODE_ALWAYS_NOTIFY_UPDATE: truthy("OPENCODE_ALWAYS_NOTIFY_UPDATE"),
-  OPENCODE_DISABLE_PRUNE: truthy("OPENCODE_DISABLE_PRUNE"),
-  OPENCODE_DISABLE_TERMINAL_TITLE: truthy("OPENCODE_DISABLE_TERMINAL_TITLE"),
-  OPENCODE_SHOW_TTFD: truthy("OPENCODE_SHOW_TTFD"),
-  OPENCODE_DISABLE_AUTOCOMPACT: truthy("OPENCODE_DISABLE_AUTOCOMPACT"),
-  OPENCODE_DISABLE_MODELS_FETCH: truthy("OPENCODE_DISABLE_MODELS_FETCH"),
-  OPENCODE_DISABLE_MOUSE: truthy("OPENCODE_DISABLE_MOUSE"),
-  OPENCODE_FAKE_VCS: process.env["OPENCODE_FAKE_VCS"],
-  OPENCODE_SERVER_PASSWORD: process.env["OPENCODE_SERVER_PASSWORD"],
-  OPENCODE_SERVER_USERNAME: process.env["OPENCODE_SERVER_USERNAME"],
-  OPENCODE_DISABLE_FFF: fff === undefined ? process.platform === "win32" : truthy("OPENCODE_DISABLE_FFF"),
+  NEXUS_AUTO_HEAP_SNAPSHOT: truthy("NEXUS_AUTO_HEAP_SNAPSHOT"),
+  NEXUS_GIT_BASH_PATH: process.env["NEXUS_GIT_BASH_PATH"],
+  NEXUS_CONFIG: process.env["NEXUS_CONFIG"],
+  NEXUS_CONFIG_CONTENT: process.env["NEXUS_CONFIG_CONTENT"],
+  NEXUS_DISABLE_AUTOUPDATE: truthy("NEXUS_DISABLE_AUTOUPDATE"),
+  NEXUS_ALWAYS_NOTIFY_UPDATE: truthy("NEXUS_ALWAYS_NOTIFY_UPDATE"),
+  NEXUS_DISABLE_PRUNE: truthy("NEXUS_DISABLE_PRUNE"),
+  NEXUS_DISABLE_TERMINAL_TITLE: truthy("NEXUS_DISABLE_TERMINAL_TITLE"),
+  NEXUS_SHOW_TTFD: truthy("NEXUS_SHOW_TTFD"),
+  NEXUS_DISABLE_AUTOCOMPACT: truthy("NEXUS_DISABLE_AUTOCOMPACT"),
+  NEXUS_DISABLE_MODELS_FETCH: truthy("NEXUS_DISABLE_MODELS_FETCH"),
+  NEXUS_DISABLE_MOUSE: truthy("NEXUS_DISABLE_MOUSE"),
+  NEXUS_FAKE_VCS: process.env["NEXUS_FAKE_VCS"],
+  NEXUS_SERVER_PASSWORD: process.env["NEXUS_SERVER_PASSWORD"],
+  NEXUS_SERVER_USERNAME: process.env["NEXUS_SERVER_USERNAME"],
+  NEXUS_DISABLE_FFF: fff === undefined ? process.platform === "win32" : truthy("NEXUS_DISABLE_FFF"),
 
   // Experimental
-  OPENCODE_EXPERIMENTAL_FILEWATCHER: Config.boolean("OPENCODE_EXPERIMENTAL_FILEWATCHER").pipe(
+  NEXUS_EXPERIMENTAL_FILEWATCHER: Config.boolean("NEXUS_EXPERIMENTAL_FILEWATCHER").pipe(
     Config.withDefault(false),
   ),
-  OPENCODE_EXPERIMENTAL_DISABLE_FILEWATCHER: Config.boolean("OPENCODE_EXPERIMENTAL_DISABLE_FILEWATCHER").pipe(
+  NEXUS_EXPERIMENTAL_DISABLE_FILEWATCHER: Config.boolean("NEXUS_EXPERIMENTAL_DISABLE_FILEWATCHER").pipe(
     Config.withDefault(false),
   ),
-  OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT:
-    copy === undefined ? process.platform === "win32" : truthy("OPENCODE_EXPERIMENTAL_DISABLE_COPY_ON_SELECT"),
-  OPENCODE_MODELS_URL: process.env["OPENCODE_MODELS_URL"],
-  OPENCODE_MODELS_PATH: process.env["OPENCODE_MODELS_PATH"],
-  OPENCODE_DB: process.env["OPENCODE_DB"],
+  NEXUS_EXPERIMENTAL_DISABLE_COPY_ON_SELECT:
+    copy === undefined ? process.platform === "win32" : truthy("NEXUS_EXPERIMENTAL_DISABLE_COPY_ON_SELECT"),
+  NEXUS_MODELS_URL: process.env["NEXUS_MODELS_URL"],
+  NEXUS_MODELS_PATH: process.env["NEXUS_MODELS_PATH"],
+  NEXUS_DB: process.env["NEXUS_DB"],
 
-  OPENCODE_WORKSPACE_ID: process.env["OPENCODE_WORKSPACE_ID"],
-  OPENCODE_EXPERIMENTAL_WORKSPACES: enabledByExperimental("OPENCODE_EXPERIMENTAL_WORKSPACES"),
+  NEXUS_WORKSPACE_ID: process.env["NEXUS_WORKSPACE_ID"],
+  NEXUS_EXPERIMENTAL_WORKSPACES: enabledByExperimental("NEXUS_EXPERIMENTAL_WORKSPACES"),
 
   // Evaluated at access time (not module load) because tests, the CLI, and
   // external tooling set these env vars at runtime.
-  get OPENCODE_DISABLE_PROJECT_CONFIG() {
-    return truthy("OPENCODE_DISABLE_PROJECT_CONFIG")
+  get NEXUS_DISABLE_PROJECT_CONFIG() {
+    return truthy("NEXUS_DISABLE_PROJECT_CONFIG")
   },
-  get OPENCODE_EXPERIMENTAL_REFERENCES() {
-    return enabledByExperimental("OPENCODE_EXPERIMENTAL_REFERENCES")
+  get NEXUS_EXPERIMENTAL_REFERENCES() {
+    return enabledByExperimental("NEXUS_EXPERIMENTAL_REFERENCES")
   },
-  get OPENCODE_TUI_CONFIG() {
-    return process.env["OPENCODE_TUI_CONFIG"]
+  get NEXUS_TUI_CONFIG() {
+    return process.env["NEXUS_TUI_CONFIG"]
   },
-  get OPENCODE_CONFIG_DIR() {
-    return process.env["OPENCODE_CONFIG_DIR"]
+  get NEXUS_CONFIG_DIR() {
+    return process.env["NEXUS_CONFIG_DIR"]
   },
-  get OPENCODE_PURE() {
-    return truthy("OPENCODE_PURE")
+  get NEXUS_PURE() {
+    return truthy("NEXUS_PURE")
   },
-  get OPENCODE_PERMISSION() {
-    return process.env["OPENCODE_PERMISSION"]
+  get NEXUS_PERMISSION() {
+    return process.env["NEXUS_PERMISSION"]
   },
-  get OPENCODE_PLUGIN_META_FILE() {
-    return process.env["OPENCODE_PLUGIN_META_FILE"]
+  get NEXUS_PLUGIN_META_FILE() {
+    return process.env["NEXUS_PLUGIN_META_FILE"]
   },
-  get OPENCODE_CLIENT() {
-    return process.env["OPENCODE_CLIENT"] ?? "cli"
+  get NEXUS_CLIENT() {
+    return process.env["NEXUS_CLIENT"] ?? "cli"
   },
 }

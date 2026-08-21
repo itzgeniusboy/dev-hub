@@ -1,4 +1,4 @@
-export const wordmark = "DEV HUB"
+export const wordmark = "NEXUS"
 
 export const go = {
   left: ["    ", "█▀▀▀", "█_^█", "▀▀▀▀"],

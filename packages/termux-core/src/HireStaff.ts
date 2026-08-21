@@ -6,7 +6,7 @@ import { promisify } from "node:util"
 import { getFreelancer, type Freelancer } from "./FreelancerDB"
 
 const execFileAsync = promisify(execFile)
-const STATE_FILE = join(homedir(), ".dev-hub", "freelancers", "installed.json")
+const STATE_FILE = join(homedir(), ".nexus", "freelancers", "installed.json")
 const STORAGE_BUFFER_MB = 50
 const LOW_STORAGE_MB = 100
 
@@ -44,7 +44,7 @@ export class HireStaff {
       await this.cleanCache()
     }
 
-    if (process.env.DEVHUB_BUSINESSMAN_DRY_RUN === "1") {
+    if (process.env.NEXUS_BUSINESSMAN_DRY_RUN === "1") {
       console.log(`🤝 Hiring: ${freelancerName} (+${worker.sizeMB}MB)... [dry run]`)
       await this.recordInstalled(worker)
       return { name: freelancerName, success: true, sizeMB: worker.sizeMB, time: 0 }
@@ -88,7 +88,7 @@ export class HireStaff {
   }
 
   async cleanCache(): Promise<void> {
-    if (process.env.DEVHUB_BUSINESSMAN_DRY_RUN === "1") {
+    if (process.env.NEXUS_BUSINESSMAN_DRY_RUN === "1") {
       console.log("🧹 Cache saaf... ✅ [dry run]")
       return
     }

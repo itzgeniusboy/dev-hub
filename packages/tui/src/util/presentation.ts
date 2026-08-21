@@ -16,7 +16,7 @@ export function sessionEpilogue(input: { title: string; sessionID?: string }) {
     ...wordmarkLines("  "),
     "",
     `  ${weak("Session")}${bold}${input.title}${reset}`,
-    `  ${weak("Continue")}${bold}dev-hub -s ${input.sessionID}${reset}`,
+    `  ${weak("Continue")}${bold}nexus -s ${input.sessionID}${reset}`,
     "",
   ].join("\n")
 }

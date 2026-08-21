@@ -1,6 +1,6 @@
-# OpenCode Desktop
+# NEXUS Desktop
 
-The OpenCode Desktop app, built with Electron.
+The NEXUS Desktop app, built with Electron.
 
 ## Development
 

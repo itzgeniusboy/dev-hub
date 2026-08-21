@@ -12,7 +12,7 @@ case "$ARCH" in
 esac
 
 printf '%s\n' '======================================================='
-printf '%s\n' 'DEV HUB — TERMUX FOUNDATION'
+printf '%s\n' 'NEXUS — TERMUX FOUNDATION'
 printf '%s\n' '======================================================='
 printf 'Detected: Termux/%s (%s)\n' "${TERMUX_VERSION:-unknown}" "$ARCH_LABEL"
 
@@ -29,8 +29,8 @@ pkg install -y bash ca-certificates curl git python
 printf '%s\n' '[3/5] Installing Telegram bot runtime...'
 python -m pip install --upgrade --no-cache-dir python-telegram-bot requests
 
-printf '%s\n' '[4/5] Preparing Dev Hub directories...'
-mkdir -p "$HOME/.devhub/bots" "$HOME/.devhub/tools" "$HOME/.devhub/services" "$HOME/.devhub/logs" "$HOME/.devhub/agents" "$HOME/bin"
+printf '%s\n' '[4/5] Preparing NEXUS directories...'
+mkdir -p "$HOME/.nexus/bots" "$HOME/.nexus/tools" "$HOME/.nexus/services" "$HOME/.nexus/logs" "$HOME/.nexus/agents" "$HOME/bin"
 
 if command -v termux-setup-storage >/dev/null 2>&1 && [ ! -e "$HOME/storage/shared" ]; then
   printf '%s\n' '[5/5] Requesting shared-storage permission...'
@@ -39,19 +39,19 @@ else
   printf '%s\n' '[5/5] Shared storage already configured or Termux:API is unavailable.'
 fi
 
-if command -v dev-hub >/dev/null 2>&1; then
-  ln -sf "$(command -v dev-hub)" "$HOME/bin/devhub"
-  ln -sf "$(command -v dev-hub)" "$HOME/bin/dev-hub"
+if command -v nexus >/dev/null 2>&1; then
+  ln -sf "$(command -v nexus)" "$HOME/bin/nexus"
+  ln -sf "$(command -v nexus)" "$HOME/bin/nexus"
 fi
 
 case ":$PATH:" in
   *":$HOME/bin:"*) ;;
-  *) printf '\n%s\n' '# Dev Hub Termux' >> "$HOME/.bashrc"; printf '%s\n' 'export PATH="$HOME/bin:$PATH"' >> "$HOME/.bashrc" ;;
+  *) printf '\n%s\n' '# NEXUS Termux' >> "$HOME/.bashrc"; printf '%s\n' 'export PATH="$HOME/bin:$PATH"' >> "$HOME/.bashrc" ;;
 esac
 
 printf '%s\n' '======================================================='
-printf '%s\n' 'DEV HUB Termux foundation installed.'
+printf '%s\n' 'NEXUS Termux foundation installed.'
 printf '%s\n' "Architecture: $ARCH_LABEL"
 printf '%s\n' 'Reload with: source ~/.bashrc'
-printf '%s\n' 'Use: devhub bot template-list'
+printf '%s\n' 'Use: nexus bot template-list'
 printf '%s\n' '======================================================='

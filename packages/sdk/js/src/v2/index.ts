@@ -1,18 +1,18 @@
 export * from "./client.js"
 export * from "./server.js"
 
-import { createOpencodeClient } from "./client.js"
-import { createOpencodeServer } from "./server.js"
+import { createNexusClient } from "./client.js"
+import { createNexusServer } from "./server.js"
 import type { ServerOptions } from "./server.js"
 
 export * as data from "./data.js"
 
-export async function createOpencode(options?: ServerOptions) {
-  const server = await createOpencodeServer({
+export async function createNexus(options?: ServerOptions) {
+  const server = await createNexusServer({
     ...options,
   })
 
-  const client = createOpencodeClient({
+  const client = createNexusClient({
     baseUrl: server.url,
   })
 

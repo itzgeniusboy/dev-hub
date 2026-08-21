@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP=dev-hub
-REPO=itzgeniusboy/dev-hub
-INSTALL_DIR="${DEV_HUB_INSTALL_DIR:-$HOME/.dev-hub/bin}"
+APP=nexus
+REPO=itzgeniusboy/nexus
+INSTALL_DIR="${NEXUS_INSTALL_DIR:-$HOME/.nexus/bin}"
 
 MUTED='\033[0;2m'
 RED='\033[0;31m'
@@ -12,7 +12,7 @@ NC='\033[0m' # No Color
 
 usage() {
     cat <<EOF
-Dev Hub Installer
+NEXUS Installer
 
 Usage: install.sh [options]
 
@@ -23,9 +23,9 @@ Options:
         --no-modify-path    Don't modify shell config files (.zshrc, .bashrc, etc.)
 
 Examples:
-    curl -fsSL https://raw.githubusercontent.com/itzgeniusboy/dev-hub/main/install.sh | bash
-    curl -fsSL https://raw.githubusercontent.com/itzgeniusboy/dev-hub/main/install.sh | bash -s -- --version 0.1.5
-    ./install.sh --binary /path/to/dev-hub
+    curl -fsSL https://raw.githubusercontent.com/itzgeniusboy/nexus/main/install.sh | bash
+    curl -fsSL https://raw.githubusercontent.com/itzgeniusboy/nexus/main/install.sh | bash -s -- --version 0.1.5
+    ./install.sh --binary /path/to/nexus
 EOF
 }
 
@@ -111,7 +111,7 @@ else
       linux-x64|linux-arm64)
         ;;
       darwin-x64|darwin-arm64|windows-x64)
-        echo -e "${RED}Dev Hub does not publish a $combo release yet.${NC}"
+        echo -e "${RED}NEXUS does not publish a $combo release yet.${NC}"
         echo -e "${MUTED}Available releases: https://github.com/$REPO/releases${NC}"
         exit 1
         ;;
@@ -122,7 +122,7 @@ else
     esac
 
     if [ "$os" != "linux" ]; then
-        echo -e "${RED}Dev Hub currently publishes Linux binaries only.${NC}"
+        echo -e "${RED}NEXUS currently publishes Linux binaries only.${NC}"
         exit 1
     fi
 
@@ -178,7 +178,7 @@ else
         specific_version=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p')
 
         if [[ -z "$specific_version" ]]; then
-            echo -e "${RED}Failed to fetch the latest Dev Hub version${NC}"
+            echo -e "${RED}Failed to fetch the latest NEXUS version${NC}"
             exit 1
         fi
     else
@@ -214,8 +214,8 @@ check_version() {
 
         if [[ "$installed_version" == "$specific_version" ]]; then
             # On Termux, ensure the wrapper has the LD_PRELOAD fix before skipping
-            if [ "$is_termux" = "true" ] && [ -f "$INSTALL_DIR/dev-hub" ]; then
-                if ! grep -q "DEV_HUB_TERMUX_DIRECT_LOADER_V3" "$INSTALL_DIR/dev-hub"; then
+            if [ "$is_termux" = "true" ] && [ -f "$INSTALL_DIR/nexus" ]; then
+                if ! grep -q "NEXUS_TERMUX_DIRECT_LOADER_V3" "$INSTALL_DIR/nexus"; then
                     print_message info "${MUTED}Version ${NC}$specific_version${MUTED} installed, but launcher needs update. Refreshing...${NC}"
                     return 0
                 fi
@@ -246,7 +246,7 @@ install_termux_runtime() {
     print_message info "${MUTED}Installing the no-root Termux glibc compatibility runtime...${NC}"
     if ! pkg install -y glibc-repo glibc-runner; then
         echo -e "${RED}Unable to install Termux glibc support.${NC}"
-        echo -e "${MUTED}Run this once, then rerun the Dev Hub installer:${NC}"
+        echo -e "${MUTED}Run this once, then rerun the NEXUS installer:${NC}"
         echo -e "  pkg install glibc-repo glibc-runner"
         exit 1
     fi
@@ -258,7 +258,7 @@ install_termux_runtime() {
 }
 
 download_and_install() {
-    print_message info "\n${MUTED}Installing ${NC}Dev Hub ${MUTED}version: ${NC}$specific_version"
+    print_message info "\n${MUTED}Installing ${NC}NEXUS ${MUTED}version: ${NC}$specific_version"
     local tmp_dir="${TMPDIR:-/tmp}/dev_hub_install_$$"
     mkdir -p "$tmp_dir"
 
@@ -269,19 +269,19 @@ download_and_install() {
     fi
 
     tar -xzf "$tmp_dir/$filename" -C "$tmp_dir"
-    if [ ! -f "$tmp_dir/dev-hub" ]; then
+    if [ ! -f "$tmp_dir/nexus" ]; then
         rm -rf "$tmp_dir"
-        echo -e "${RED}Downloaded archive does not contain a dev-hub executable.${NC}"
+        echo -e "${RED}Downloaded archive does not contain a nexus executable.${NC}"
         exit 1
     fi
 
     install_termux_runtime
     if [ "$is_termux" = "true" ]; then
-        mv "$tmp_dir/dev-hub" "$INSTALL_DIR/dev-hub.bin"
-        cat > "$INSTALL_DIR/dev-hub" <<'EOF'
+        mv "$tmp_dir/nexus" "$INSTALL_DIR/nexus.bin"
+        cat > "$INSTALL_DIR/nexus" <<'EOF'
 #!/usr/bin/env bash
 set -e
-# Resolve devhub/dev-hub symlinks so the companion binary is found in the install directory.
+# Resolve nexus/nexus symlinks so the companion binary is found in the install directory.
 SOURCE="$0"
 while [[ -h "$SOURCE" ]]; do
     SOURCE_DIR="$(CDPATH= cd -- "$(dirname -- "$SOURCE")" && pwd)"
@@ -292,10 +292,10 @@ SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$SOURCE")" && pwd)"
 unset LD_PRELOAD
 GLIBC_PREFIX="${PREFIX:-}/glibc"
 if [[ ! -d "$GLIBC_PREFIX" ]]; then
-    printf '%s\n' 'Dev Hub needs Termux glibc support. Install it with: pkg install glibc-repo glibc-runner' >&2
+    printf '%s\n' 'NEXUS needs Termux glibc support. Install it with: pkg install glibc-repo glibc-runner' >&2
     exit 1
 fi
-# DEV_HUB_TERMUX_DIRECT_LOADER_V3
+# NEXUS_TERMUX_DIRECT_LOADER_V3
 # The official runner exposes the dynamic loader as glibc/bin/ld.so. Some
 # package revisions also expose the architecture-specific loader in glibc/lib.
 LOADER=""
@@ -311,7 +311,7 @@ for candidate in \
     fi
 done
 if [[ -z "$LOADER" ]]; then
-    printf '%s\n' 'Dev Hub could not find the Termux glibc dynamic loader.' >&2
+    printf '%s\n' 'NEXUS could not find the Termux glibc dynamic loader.' >&2
     printf '%s\n' "Expected: $GLIBC_PREFIX/bin/ld.so or $GLIBC_PREFIX/lib/ld-linux-*" >&2
     printf '%s\n' 'Install it with: pkg install glibc-repo glibc-runner' >&2
     exit 1
@@ -320,20 +320,20 @@ LIBRARY_PATH="$GLIBC_PREFIX/lib"
 if [[ -d "$GLIBC_PREFIX/lib64" ]]; then
     LIBRARY_PATH="$LIBRARY_PATH:$GLIBC_PREFIX/lib64"
 fi
-exec "$LOADER" --library-path "$LIBRARY_PATH" "$SCRIPT_DIR/dev-hub.bin" "$@"
+exec "$LOADER" --library-path "$LIBRARY_PATH" "$SCRIPT_DIR/nexus.bin" "$@"
 EOF
-        chmod 755 "$INSTALL_DIR/dev-hub.bin" "$INSTALL_DIR/dev-hub"
+        chmod 755 "$INSTALL_DIR/nexus.bin" "$INSTALL_DIR/nexus"
     else
-        mv "$tmp_dir/dev-hub" "$INSTALL_DIR/dev-hub"
-        chmod 755 "$INSTALL_DIR/dev-hub"
+        mv "$tmp_dir/nexus" "$INSTALL_DIR/nexus"
+        chmod 755 "$INSTALL_DIR/nexus"
     fi
     rm -rf "$tmp_dir"
 }
 
 install_from_binary() {
-    print_message info "\n${MUTED}Installing ${NC}Dev Hub ${MUTED}from: ${NC}$binary_path"
-    cp "$binary_path" "${INSTALL_DIR}/dev-hub"
-    chmod 755 "${INSTALL_DIR}/dev-hub"
+    print_message info "\n${MUTED}Installing ${NC}NEXUS ${MUTED}from: ${NC}$binary_path"
+    cp "$binary_path" "${INSTALL_DIR}/nexus"
+    chmod 755 "${INSTALL_DIR}/nexus"
 }
 
 if [ -n "$binary_path" ]; then
@@ -350,9 +350,9 @@ add_to_path() {
     if grep -Fxq "$command" "$config_file"; then
         print_message info "Command already exists in $config_file, skipping write."
     elif [[ -w $config_file ]]; then
-        echo -e "\n# Dev Hub" >> "$config_file"
+        echo -e "\n# NEXUS" >> "$config_file"
         echo "$command" >> "$config_file"
-        print_message info "${MUTED}Successfully added ${NC}Dev Hub ${MUTED}to \$PATH in ${NC}$config_file"
+        print_message info "${MUTED}Successfully added ${NC}NEXUS ${MUTED}to \$PATH in ${NC}$config_file"
     else
         print_message warning "Manually add the directory to $config_file (or similar):"
         print_message info "  $command"
@@ -418,7 +418,7 @@ install_command_alias() {
     fi
 
     # Also repair stale launchers in any writable PATH directory. This matters
-    # when an older npm/global install shadows $PREFIX/bin/devhub.
+    # when an older npm/global install shadows $PREFIX/bin/nexus.
     local path_dir
     local old_ifs="$IFS"
     IFS=:
@@ -427,7 +427,7 @@ install_command_alias() {
             continue
         fi
         if [[ -n "$path_dir" && -d "$path_dir" && -w "$path_dir" ]]; then
-            if [[ -e "$path_dir/devhub" || -L "$path_dir/devhub" || -e "$path_dir/dev-hub" || -L "$path_dir/dev-hub" ]]; then
+            if [[ -e "$path_dir/nexus" || -L "$path_dir/nexus" || -e "$path_dir/nexus" || -L "$path_dir/nexus" ]]; then
                 alias_dirs+=("$path_dir")
             fi
         fi
@@ -441,19 +441,24 @@ install_command_alias() {
         esac
         seen="${seen}${alias_dir}|"
         mkdir -p "$alias_dir"
-        rm -f "$alias_dir/devhub" "$alias_dir/dev-hub"
-        ln -s "$INSTALL_DIR/dev-hub" "$alias_dir/devhub"
-        ln -s "$INSTALL_DIR/dev-hub" "$alias_dir/dev-hub"
+        rm -f "$alias_dir/nexus" "$alias_dir/nx" "$alias_dir/devhub" "$alias_dir/opencode"
+        ln -s "$INSTALL_DIR/nexus" "$alias_dir/nexus"
+        ln -s "$INSTALL_DIR/nexus" "$alias_dir/nx"
+        ln -s "$INSTALL_DIR/nexus" "$alias_dir/devhub"
+        ln -s "$INSTALL_DIR/nexus" "$alias_dir/opencode"
+        ln -s "$INSTALL_DIR/nexus" "$alias_dir/nx"
+        ln -s "$INSTALL_DIR/nexus" "$alias_dir/devhub"
+        ln -s "$INSTALL_DIR/nexus" "$alias_dir/opencode"
     done
 }
 
 install_command_alias
 
-echo -e "\n${MUTED}Dev Hub is installed.${NC}"
+echo -e "\n${MUTED}NEXUS is installed.${NC}"
 echo -e ""
 echo -e "source <your-shell-config>  ${MUTED}# Reload PATH, if needed${NC}"
-echo -e "devhub                   ${MUTED}# Run Dev Hub (alias)${NC}"
-echo -e "dev-hub                  ${MUTED}# Run Dev Hub${NC}"
+echo -e "nexus                   ${MUTED}# Run NEXUS (alias)${NC}"
+echo -e "nexus                  ${MUTED}# Run NEXUS${NC}"
 echo -e ""
 echo -e "${MUTED}For more information visit ${NC}https://github.com/$REPO"
 echo -e ""

@@ -1,10 +1,10 @@
 [Desktop Entry]
-Name=Dev Hub
-Exec=/opt/OpenCode/ai.opencode.desktop %U
+Name=NEXUS
+Exec=/opt/NEXUS/ai.nexus.desktop %U
 Terminal=false
 Type=Application
-Icon=ai.opencode.desktop
-StartupWMClass=ai.opencode.desktop
+Icon=ai.nexus.desktop
+StartupWMClass=ai.nexus.desktop
 NoDisplay=true
 Comment=Open source AI coding agent
 Categories=Development;

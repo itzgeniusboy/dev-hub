@@ -7,7 +7,7 @@ import { cleanupStoreFiles, deleteStoreFileIfEmpty } from "./store-cleanup"
 const roots: string[] = []
 
 async function tempRoot() {
-  const root = await mkdtemp(join(tmpdir(), "opencode-store-cleanup-"))
+  const root = await mkdtemp(join(tmpdir(), "nexus-store-cleanup-"))
   roots.push(root)
   return root
 }
@@ -25,37 +25,37 @@ describe("store cleanup", () => {
   test("removes empty scoped stores and leaves global stores alone", async () => {
     const root = await tempRoot()
     const now = new Date("2026-07-01T00:00:00.000Z")
-    await writeStore(root, "dev-hub.draft.empty.dat", "{}", now)
-    await writeStore(root, "dev-hub.workspace.empty.dat", "{\n}", now)
-    await writeStore(root, "dev-hub.global.dat", "{}", now)
-    await writeStore(root, "dev-hub.workspace.empty.dat.json", "{}", now)
+    await writeStore(root, "nexus.draft.empty.dat", "{}", now)
+    await writeStore(root, "nexus.workspace.empty.dat", "{\n}", now)
+    await writeStore(root, "nexus.global.dat", "{}", now)
+    await writeStore(root, "nexus.workspace.empty.dat.json", "{}", now)
 
     const result = await cleanupStoreFiles(root, now.getTime())
 
-    expect(result.deleted.sort()).toEqual(["dev-hub.draft.empty.dat", "dev-hub.workspace.empty.dat"])
-    expect((await readdir(root)).sort()).toEqual(["dev-hub.global.dat", "dev-hub.workspace.empty.dat.json"])
+    expect(result.deleted.sort()).toEqual(["nexus.draft.empty.dat", "nexus.workspace.empty.dat"])
+    expect((await readdir(root)).sort()).toEqual(["nexus.global.dat", "nexus.workspace.empty.dat.json"])
   })
 
   test("removes stale drafts by age without removing non-empty workspace stores", async () => {
     const root = await tempRoot()
     const now = new Date("2026-07-01T00:00:00.000Z")
-    await writeStore(root, "dev-hub.draft.old.dat", '{"draft:prompt":"hello"}', new Date("2026-05-01T00:00:00.000Z"))
-    await writeStore(root, "dev-hub.draft.recent.dat", '{"draft:prompt":"hello"}', now)
+    await writeStore(root, "nexus.draft.old.dat", '{"draft:prompt":"hello"}', new Date("2026-05-01T00:00:00.000Z"))
+    await writeStore(root, "nexus.draft.recent.dat", '{"draft:prompt":"hello"}', now)
     await writeStore(
       root,
-      "dev-hub.workspace.old.dat",
+      "nexus.workspace.old.dat",
       '{"workspace:layout":"wide"}',
       new Date("2025-01-01T00:00:00.000Z"),
     )
-    await writeStore(root, "dev-hub.workspace.recent.dat", '{"workspace:layout":"wide"}', now)
+    await writeStore(root, "nexus.workspace.recent.dat", '{"workspace:layout":"wide"}', now)
 
     const result = await cleanupStoreFiles(root, now.getTime())
 
-    expect(result.deleted).toEqual(["dev-hub.draft.old.dat"])
+    expect(result.deleted).toEqual(["nexus.draft.old.dat"])
     expect((await readdir(root)).sort()).toEqual([
-      "dev-hub.draft.recent.dat",
-      "dev-hub.workspace.old.dat",
-      "dev-hub.workspace.recent.dat",
+      "nexus.draft.recent.dat",
+      "nexus.workspace.old.dat",
+      "nexus.workspace.recent.dat",
     ])
   })
 
@@ -66,7 +66,7 @@ describe("store cleanup", () => {
       Array.from({ length: 102 }, (_, index) =>
         writeStore(
           root,
-          `dev-hub.draft.${index}.dat`,
+          `nexus.draft.${index}.dat`,
           '{"draft:prompt":"hello"}',
           new Date(now.getTime() - index * 1000),
         ),
@@ -77,17 +77,17 @@ describe("store cleanup", () => {
 
     const remaining = await readdir(root)
 
-    expect(result.deleted.sort()).toEqual(["dev-hub.draft.100.dat", "dev-hub.draft.101.dat"])
+    expect(result.deleted.sort()).toEqual(["nexus.draft.100.dat", "nexus.draft.101.dat"])
     expect(remaining).toHaveLength(100)
   })
 
   test("removes a scoped store immediately when it becomes empty", async () => {
     const root = await tempRoot()
-    await writeStore(root, "dev-hub.draft.empty.dat", "{}", new Date("2026-07-01T00:00:00.000Z"))
-    await writeStore(root, "dev-hub.global.dat", "{}", new Date("2026-07-01T00:00:00.000Z"))
+    await writeStore(root, "nexus.draft.empty.dat", "{}", new Date("2026-07-01T00:00:00.000Z"))
+    await writeStore(root, "nexus.global.dat", "{}", new Date("2026-07-01T00:00:00.000Z"))
 
-    expect(await deleteStoreFileIfEmpty(root, "dev-hub.draft.empty.dat")).toBe(true)
-    expect(await deleteStoreFileIfEmpty(root, "dev-hub.global.dat")).toBe(false)
-    expect(await readdir(root)).toEqual(["dev-hub.global.dat"])
+    expect(await deleteStoreFileIfEmpty(root, "nexus.draft.empty.dat")).toBe(true)
+    expect(await deleteStoreFileIfEmpty(root, "nexus.global.dat")).toBe(false)
+    expect(await readdir(root)).toEqual(["nexus.global.dat"])
   })
 })

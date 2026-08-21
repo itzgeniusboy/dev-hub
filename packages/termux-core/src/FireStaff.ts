@@ -23,7 +23,7 @@ export class FireStaff {
     let success = true
     let error: string | undefined
     try {
-      if (process.env.DEVHUB_BUSINESSMAN_DRY_RUN !== "1") {
+      if (process.env.NEXUS_BUSINESSMAN_DRY_RUN !== "1") {
         await execFileAsync("sh", ["-lc", worker.uninstallCmd], { timeout: 120_000, maxBuffer: 1024 * 1024 })
       }
     } catch (cause) {

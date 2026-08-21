@@ -1,5 +1,5 @@
 {
-  "name": "@opencode-ai/function",
+  "name": "@nexus-ai/function",
   "version": "1.18.19",
   "$schema": "https://json.schemastore.org/package.json",
   "private": true,

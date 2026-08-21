@@ -36,7 +36,7 @@ export function Logo() {
         {"        ◉  POWER CORE"}
       </text>
       <text fg={theme.textMuted} selectable={false}>
-        {"     DEV HUB AGNET ...The Ultimate Powerhouse for Android Automation!"}
+        {"     NEXUS AGNET ...The Ultimate Powerhouse for Android Automation!"}
       </text>
       <text fg={theme.background} selectable={false}>
         {" "}

@@ -6,13 +6,13 @@
    │ PLAN │ BUILD│ CHECK│
    ╰──────┴──────┴──────╯
         ◉  POWER CORE
-     DEV HUB AGNET ...The Ultimate Powerhouse for Android Automation!
+     NEXUS AGNET ...The Ultimate Powerhouse for Android Automation!
 </pre>
 </div>
 <p align="center">
-  <a href="https://github.com/itzgeniusboy/dev-hub/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
-  <a href="https://www.npmjs.com/package/dev-hub-ai"><img alt="npm" src="https://img.shields.io/npm/v/dev-hub-ai?style=flat-square" /></a>
-  <a href="https://github.com/itzgeniusboy/dev-hub/actions/workflows/publish.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/itzgeniusboy/dev-hub/publish.yml?style=flat-square&branch=dev" /></a>
+  <a href="https://github.com/itzgeniusboy/nexus/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
+  <a href="https://www.npmjs.com/package/nexus-ai"><img alt="npm" src="https://img.shields.io/npm/v/nexus-ai?style=flat-square" /></a>
+  <a href="https://github.com/itzgeniusboy/nexus/actions/workflows/publish.yml"><img alt="Build status" src="https://img.shields.io/github/actions/workflow/status/itzgeniusboy/nexus/publish.yml?style=flat-square&branch=dev" /></a>
 </p>
 
 <p align="center">
@@ -40,7 +40,7 @@
   <a href="README.vi.md">Tiếng Việt</a>
 </p>
 
-[![Dev Hub Terminal UI](packages/web/src/assets/lander/screenshot.png)](https://github.com/itzgeniusboy/dev-hub)
+[![NEXUS Terminal UI](packages/web/src/assets/lander/screenshot.png)](https://github.com/itzgeniusboy/nexus)
 
 ---
 
@@ -48,18 +48,18 @@
 
 ```bash
 # YOLO
-curl -fsSL https://github.com/itzgeniusboy/dev-hub/releases | bash
+curl -fsSL https://github.com/itzgeniusboy/nexus/releases | bash
 
 # Package managers
-npm i -g dev-hub-ai@latest        # or bun/pnpm/yarn
-scoop install dev-hub             # Windows
-choco install dev-hub             # Windows
-brew install itzgeniusboy/dev-hub # macOS and Linux (recommended, always up to date)
-brew install dev-hub              # macOS and Linux (official brew formula, updated less)
-sudo pacman -S dev-hub            # Arch Linux (Stable)
-paru -S dev-hub-bin               # Arch Linux (Latest from AUR)
-mise use -g dev-hub               # Any OS
-nix run nixpkgs#dev-hub           # or github:itzgeniusboy/dev-hub for latest dev branch
+npm i -g nexus-ai@latest        # or bun/pnpm/yarn
+scoop install nexus             # Windows
+choco install nexus             # Windows
+brew install itzgeniusboy/nexus # macOS and Linux (recommended, always up to date)
+brew install nexus              # macOS and Linux (official brew formula, updated less)
+sudo pacman -S nexus            # Arch Linux (Stable)
+paru -S nexus-bin               # Arch Linux (Latest from AUR)
+mise use -g nexus               # Any OS
+nix run nixpkgs#nexus           # or github:itzgeniusboy/nexus for latest dev branch
 ```
 
 > [!TIP]
@@ -67,40 +67,40 @@ nix run nixpkgs#dev-hub           # or github:itzgeniusboy/dev-hub for latest de
 
 ### Desktop App (BETA)
 
-Dev Hub is also available as a desktop application. Download directly from the [releases page](https://github.com/itzgeniusboy/dev-hub/releases) or [dev-hub/download](https://github.com/itzgeniusboy/dev-hub/releases).
+NEXUS is also available as a desktop application. Download directly from the [releases page](https://github.com/itzgeniusboy/nexus/releases) or [nexus/download](https://github.com/itzgeniusboy/nexus/releases).
 
 | Platform              | Download                           |
 | --------------------- | ---------------------------------- |
-| macOS (Apple Silicon) | `dev-hub-desktop-mac-arm64.dmg`   |
-| macOS (Intel)         | `dev-hub-desktop-mac-x64.dmg`     |
-| Windows               | `dev-hub-desktop-windows-x64.exe` |
+| macOS (Apple Silicon) | `nexus-desktop-mac-arm64.dmg`   |
+| macOS (Intel)         | `nexus-desktop-mac-x64.dmg`     |
+| Windows               | `nexus-desktop-windows-x64.exe` |
 | Linux                 | `.deb`, `.rpm`, or `.AppImage`     |
 
 ```bash
 # macOS (Homebrew)
-brew install --cask opencode-desktop
+brew install --cask nexus-desktop
 # Windows (Scoop)
-scoop bucket add extras; scoop install extras/opencode-desktop
+scoop bucket add extras; scoop install extras/nexus-desktop
 ```
 
 #### Installation Directory
 
 The install script respects the following priority order for the installation path:
 
-1. `$DEV_HUB_INSTALL_DIR` - Custom installation directory
+1. `$NEXUS_INSTALL_DIR` - Custom installation directory
 2. `$XDG_BIN_DIR` - XDG Base Directory Specification compliant path
 3. `$HOME/bin` - Standard user binary directory (if it exists or can be created)
-4. `$HOME/.dev-hub/bin` - Default fallback
+4. `$HOME/.nexus/bin` - Default fallback
 
 ```bash
 # Examples
-DEV_HUB_INSTALL_DIR=/usr/local/bin curl -fsSL https://github.com/itzgeniusboy/dev-hub/releases | bash
-XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://github.com/itzgeniusboy/dev-hub/releases | bash
+NEXUS_INSTALL_DIR=/usr/local/bin curl -fsSL https://github.com/itzgeniusboy/nexus/releases | bash
+XDG_BIN_DIR=$HOME/.local/bin curl -fsSL https://github.com/itzgeniusboy/nexus/releases | bash
 ```
 
 ### Agents
 
-Dev Hub includes two built-in agents you can switch between with the `Tab` key.
+NEXUS includes two built-in agents you can switch between with the `Tab` key.
 
 - **build** - Default, full-access agent for development work
 - **plan** - Read-only agent for analysis and code exploration
@@ -111,20 +111,20 @@ Dev Hub includes two built-in agents you can switch between with the `Tab` key.
 Also included is a **general** subagent for complex searches and multistep tasks.
 This is used internally and can be invoked using `@general` in messages.
 
-Learn more about [agents](https://github.com/itzgeniusboy/dev-hub#readme/agents).
+Learn more about [agents](https://github.com/itzgeniusboy/nexus#readme/agents).
 
 ### Documentation
 
-For more info on how to configure Dev Hub, [**head over to our docs**](https://github.com/itzgeniusboy/dev-hub#readme).
+For more info on how to configure NEXUS, [**head over to our docs**](https://github.com/itzgeniusboy/nexus#readme).
 
 ### Contributing
 
-If you're interested in contributing to Dev Hub, please read our [contributing docs](./CONTRIBUTING.md) before submitting a pull request.
+If you're interested in contributing to NEXUS, please read our [contributing docs](./CONTRIBUTING.md) before submitting a pull request.
 
-### Building on Dev Hub
+### Building on NEXUS
 
-If you are working on a project that's related to Dev Hub and is using "dev-hub" as part of its name, for example "opencode-dashboard" or "opencode-mobile", please add a note to your README to clarify that it is not built by the Dev Hub team and is not affiliated with us in any way.
+If you are working on a project that's related to NEXUS and is using "nexus" as part of its name, for example "nexus-dashboard" or "nexus-mobile", please add a note to your README to clarify that it is not built by the NEXUS team and is not affiliated with us in any way.
 
 ---
 
-**Join our community** [Discord](https://github.com/itzgeniusboy/dev-hub) | [X.com](https://github.com/itzgeniusboy/dev-hub)
+**Join our community** [Discord](https://github.com/itzgeniusboy/nexus) | [X.com](https://github.com/itzgeniusboy/nexus)

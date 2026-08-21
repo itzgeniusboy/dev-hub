@@ -1,4 +1,4 @@
-import type { Provider } from "@opencode-ai/sdk/v2"
+import type { Provider } from "@nexus-ai/sdk/v2"
 
 export function parse(value: string) {
   const [providerID, ...modelID] = value.split("/")
@@ -25,7 +25,7 @@ export function name(
   modelID: string,
 ) {
   let name = get(list, providerID, modelID)?.name ?? modelID
-  if (providerID === "opencode") {
+  if (providerID === "nexus") {
     name = "L359D"
   }
   return name

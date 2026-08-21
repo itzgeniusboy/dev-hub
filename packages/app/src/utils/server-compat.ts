@@ -1,6 +1,6 @@
 import type { ServerApi } from "./server"
 import type { ServerProtocol } from "./server-protocol"
-import type { AgentPartInput, FilePartInput, OpencodeClient, Session, TextPartInput } from "@opencode-ai/sdk/v2/client"
+import type { AgentPartInput, FilePartInput, NexusClient, Session, TextPartInput } from "@nexus-ai/sdk/v2/client"
 import type {
   Project,
   ProjectCurrent,
@@ -14,9 +14,9 @@ import type {
   SessionPromptOutput,
   SessionShellInput,
   SessionShellOutput,
-} from "@opencode-ai/client/promise"
+} from "@nexus-ai/client/promise"
 
-type LegacyClient = OpencodeClient
+type LegacyClient = NexusClient
 type LegacyFor = (directory?: string) => LegacyClient
 type CompatibleSessionApi = Omit<
   SessionApi,

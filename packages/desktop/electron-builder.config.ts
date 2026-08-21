@@ -10,10 +10,10 @@ const packageDir = path.dirname(fileURLToPath(import.meta.url))
 const rootDir = path.resolve(packageDir, "../..")
 const signScript = path.join(rootDir, "script", "sign-windows.ps1")
 // The Electron 42 packaging update briefly installed Linux launchers/icons under
-// "opencode-desktop". Keep that hidden desktop entry around so existing GNOME/KDE
+// "nexus-desktop". Keep that hidden desktop entry around so existing GNOME/KDE
 // pins still resolve after the canonical app id changes back to dev.hub.desktop.
-const legacyDesktopEntry = path.join(packageDir, "resources", "linux", "dev-hub-desktop.desktop")
-const legacyDesktopEntryFpm = `${legacyDesktopEntry}=/usr/share/applications/dev-hub-desktop.desktop`
+const legacyDesktopEntry = path.join(packageDir, "resources", "linux", "nexus-desktop.desktop")
+const legacyDesktopEntryFpm = `${legacyDesktopEntry}=/usr/share/applications/nexus-desktop.desktop`
 
 const metainfoFpm = (appId: string) =>
   `${path.join(packageDir, "resources", `${appId}.metainfo.xml`)}=/usr/share/metainfo/${appId}.metainfo.xml`
@@ -30,7 +30,7 @@ async function signWindows(configuration: { path: string }) {
 }
 
 const channel = (() => {
-  const raw = process.env.OPENCODE_CHANNEL
+  const raw = process.env.NEXUS_CHANNEL
   if (raw === "dev" || raw === "beta" || raw === "prod") return raw
   return "dev"
 })()
@@ -42,7 +42,7 @@ const APP_IDS = {
 } as const
 
 const getBase = (appId: string): Configuration => ({
-  artifactName: "dev-hub-desktop-${os}-${arch}.${ext}",
+  artifactName: "nexus-desktop-${os}-${arch}.${ext}",
   directories: {
     output: "dist",
     buildResources: "resources",
@@ -55,14 +55,14 @@ const getBase = (appId: string): Configuration => ({
   extraMetadata: {
     desktopName: `${appId}.desktop`,
   },
-  files: ["out/**/*", "resources/**/*", "!resources/dev-hub-cli*"],
+  files: ["out/**/*", "resources/**/*", "!resources/nexus-cli*"],
   extraResources: [
     ...(channel === "dev"
       ? [
           {
             from: "resources/",
             to: "",
-            filter: ["dev-hub-cli*"],
+            filter: ["nexus-cli*"],
           },
         ]
       : []),
@@ -86,8 +86,8 @@ const getBase = (appId: string): Configuration => ({
     sign: true,
   },
   protocols: {
-    name: "Dev Hub",
-    schemes: ["dev-hub"],
+    name: "NEXUS",
+    schemes: ["nexus"],
   },
   win: {
     icon: `resources/icons/icon.ico`,
@@ -127,31 +127,31 @@ function getConfig() {
       return {
         ...base,
         appId,
-        productName: "Dev Hub Dev",
+        productName: "NEXUS Dev",
         deb: { fpm: [metainfoFpm(appId)] },
-        rpm: { packageName: "dev-hub-dev", fpm: [metainfoFpm(appId)] },
+        rpm: { packageName: "nexus-dev", fpm: [metainfoFpm(appId)] },
       }
     }
     case "beta": {
       return {
         ...base,
         appId,
-        productName: "Dev Hub Beta",
-        protocols: { name: "Dev Hub Beta", schemes: ["dev-hub"] },
-        publish: { provider: "github", owner: "anomalyco", repo: "opencode-beta", channel: "latest" },
+        productName: "NEXUS Beta",
+        protocols: { name: "NEXUS Beta", schemes: ["nexus"] },
+        publish: { provider: "github", owner: "anomalyco", repo: "nexus-beta", channel: "latest" },
         deb: { fpm: [metainfoFpm(appId)] },
-        rpm: { packageName: "dev-hub-beta", fpm: [metainfoFpm(appId)] },
+        rpm: { packageName: "nexus-beta", fpm: [metainfoFpm(appId)] },
       }
     }
     case "prod": {
       return {
         ...base,
         appId,
-        productName: "Dev Hub",
-        protocols: { name: "Dev Hub", schemes: ["dev-hub"] },
-        publish: { provider: "github", owner: "anomalyco", repo: "opencode", channel: "latest" },
+        productName: "NEXUS",
+        protocols: { name: "NEXUS", schemes: ["nexus"] },
+        publish: { provider: "github", owner: "anomalyco", repo: "nexus", channel: "latest" },
         deb: { fpm: [metainfoFpm(appId), legacyDesktopEntryFpm] },
-        rpm: { packageName: "dev-hub", fpm: [metainfoFpm(appId), legacyDesktopEntryFpm] },
+        rpm: { packageName: "nexus", fpm: [metainfoFpm(appId), legacyDesktopEntryFpm] },
       }
     }
   }

@@ -1,7 +1,7 @@
 {
-  "$schema": "https://opencode.ai/desktop-theme.json",
-  "name": "OpenCode",
-  "id": "opencode",
+  "$schema": "https://nexus.ai/desktop-theme.json",
+  "name": "NEXUS",
+  "id": "nexus",
   "light": {
     "palette": {
       "neutral": "#ffffff",

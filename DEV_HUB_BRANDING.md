@@ -1,6 +1,6 @@
-# Dev Hub branding
+# NEXUS branding
 
-Dev Hub is a branding fork of [OpenCode](https://github.com/anomalyco/opencode).
+NEXUS is a branding fork of [NEXUS](https://github.com/anomalyco/nexus).
 
 The UI layout, theme, colors, icons, and interaction behavior are intentionally unchanged.
 Only product naming, executable metadata, desktop metadata, and user-facing product copy were updated.

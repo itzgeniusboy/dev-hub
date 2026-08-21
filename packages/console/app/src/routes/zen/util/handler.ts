@@ -1,19 +1,19 @@
 import type { APIEvent } from "@solidjs/start/server"
-import { and, Database, eq, isNull, lt, or, sql } from "@opencode-ai/console-core/drizzle/index.js"
-import { KeyTable } from "@opencode-ai/console-core/schema/key.sql.js"
-import { BillingTable, LiteTable, SubscriptionTable, UsageTable } from "@opencode-ai/console-core/schema/billing.sql.js"
-import { centsToMicroCents } from "@opencode-ai/console-core/util/price.js"
-import { getMonthlyBounds, getWeekBounds } from "@opencode-ai/console-core/util/date.js"
-import { Identifier } from "@opencode-ai/console-core/identifier.js"
-import { Billing } from "@opencode-ai/console-core/billing.js"
-import { Actor } from "@opencode-ai/console-core/actor.js"
-import { WorkspaceTable } from "@opencode-ai/console-core/schema/workspace.sql.js"
-import { ZenData } from "@opencode-ai/console-core/model.js"
-import { Subscription } from "@opencode-ai/console-core/subscription.js"
-import { BlackData } from "@opencode-ai/console-core/black.js"
-import { UserTable } from "@opencode-ai/console-core/schema/user.sql.js"
-import { ModelTable } from "@opencode-ai/console-core/schema/model.sql.js"
-import { ProviderTable } from "@opencode-ai/console-core/schema/provider.sql.js"
+import { and, Database, eq, isNull, lt, or, sql } from "@nexus-ai/console-core/drizzle/index.js"
+import { KeyTable } from "@nexus-ai/console-core/schema/key.sql.js"
+import { BillingTable, LiteTable, SubscriptionTable, UsageTable } from "@nexus-ai/console-core/schema/billing.sql.js"
+import { centsToMicroCents } from "@nexus-ai/console-core/util/price.js"
+import { getMonthlyBounds, getWeekBounds } from "@nexus-ai/console-core/util/date.js"
+import { Identifier } from "@nexus-ai/console-core/identifier.js"
+import { Billing } from "@nexus-ai/console-core/billing.js"
+import { Actor } from "@nexus-ai/console-core/actor.js"
+import { WorkspaceTable } from "@nexus-ai/console-core/schema/workspace.sql.js"
+import { ZenData } from "@nexus-ai/console-core/model.js"
+import { Subscription } from "@nexus-ai/console-core/subscription.js"
+import { BlackData } from "@nexus-ai/console-core/black.js"
+import { UserTable } from "@nexus-ai/console-core/schema/user.sql.js"
+import { ModelTable } from "@nexus-ai/console-core/schema/model.sql.js"
+import { ProviderTable } from "@nexus-ai/console-core/schema/provider.sql.js"
 import { logger } from "./logger"
 import {
   AuthError,
@@ -43,15 +43,15 @@ import { createRateLimiter as createIpRateLimiter } from "./ipRateLimiter"
 import { createRateLimiter as createKeyRateLimiter } from "./keyRateLimiter"
 import { createTrialLimiter } from "./trialLimiter"
 import { createStickyTracker } from "./stickyProviderTracker"
-import { LiteData } from "@opencode-ai/console-core/lite.js"
-import { Resource } from "@opencode-ai/console-resource"
+import { LiteData } from "@nexus-ai/console-core/lite.js"
+import { Resource } from "@nexus-ai/console-resource"
 import { i18n, type Key } from "~/i18n"
 import { localeFromRequest } from "~/lib/language"
 import { createModelTpmLimiter } from "./modelTpmLimiter"
 import { createModelTpsLimiter } from "./modelTpsLimiter"
 import { createProviderBudgetTracker } from "./providerBudgetTracker"
 import { accumulateUsage, HOT_WORKSPACES } from "./usageBatcher"
-import { Workspace } from "@opencode-ai/console-core/workspace.js"
+import { Workspace } from "@nexus-ai/console-core/workspace.js"
 import { countryFromRequest, isModelCountryRestricted } from "~/lib/request-country"
 
 type ZenData = Awaited<ReturnType<typeof ZenData.list>>
@@ -106,10 +106,10 @@ export async function handler(
     const ip = rawIp.includes(":") ? rawIp.split(":").slice(0, 4).join(":") : rawIp
     const rawZenApiKey = opts.parseApiKey(input.request.headers)
     const zenApiKey = rawZenApiKey === "public" ? undefined : rawZenApiKey
-    const sessionId = input.request.headers.get("x-opencode-session") ?? ""
-    const requestId = input.request.headers.get("x-opencode-request") ?? ""
-    const ocClient = input.request.headers.get("x-opencode-client") ?? ""
-    const projectId = input.request.headers.get("x-opencode-project") ?? ""
+    const sessionId = input.request.headers.get("x-nexus-session") ?? ""
+    const requestId = input.request.headers.get("x-nexus-request") ?? ""
+    const ocClient = input.request.headers.get("x-nexus-client") ?? ""
+    const projectId = input.request.headers.get("x-nexus-project") ?? ""
     const userAgent = input.request.headers.get("user-agent") ?? ""
     logger.metric({
       is_stream: isStream,
@@ -139,7 +139,7 @@ export async function handler(
     )
       throw new DataPolicyError(
         t("zen.api.error.trainingNotAllowed", {
-          consoleGoUrl: `https://opencode.ai/workspace/${authInfo.workspaceID}/go`,
+          consoleGoUrl: `https://nexus.ai/workspace/${authInfo.workspaceID}/go`,
         }),
       )
     const allowedRegions = authInfo?.region
@@ -158,7 +158,7 @@ export async function handler(
     )
       throw new RegionError(
         t("zen.api.error.regionNotAllowed", {
-          consoleGoUrl: `https://opencode.ai/workspace/${authInfo.workspaceID}/go`,
+          consoleGoUrl: `https://nexus.ai/workspace/${authInfo.workspaceID}/go`,
         }),
       )
     const stickyId = sessionId ? sessionId : (authInfo?.workspaceID ?? ip)
@@ -260,10 +260,10 @@ export async function handler(
             })
             headers.delete("host")
             headers.delete("content-length")
-            headers.delete("x-opencode-request")
-            if (!isNewInference) headers.delete("x-opencode-session")
-            headers.delete("x-opencode-project")
-            headers.delete("x-opencode-client")
+            headers.delete("x-nexus-request")
+            if (!isNewInference) headers.delete("x-nexus-session")
+            headers.delete("x-nexus-project")
+            headers.delete("x-nexus-client")
             return headers
           })(),
           body: reqBody,
@@ -275,8 +275,8 @@ export async function handler(
       )
 
       if (isNewInference) {
-        const resEndpointId = res.headers.get("x-opencode-endpoint-id")
-        const resEndpointModelId = res.headers.get("x-opencode-upstream-model-id")
+        const resEndpointId = res.headers.get("x-nexus-endpoint-id")
+        const resEndpointModelId = res.headers.get("x-nexus-upstream-model-id")
         if (resEndpointId && resEndpointModelId)
           logger.metric({
             provider: resEndpointId,
@@ -577,7 +577,7 @@ export async function handler(
       throw new ModelError(
         `${t("zen.api.error.trialEnded", {
           model: modelData.name,
-          link: "https://opencode.ai/go",
+          link: "https://nexus.ai/go",
         })}`,
       )
 
@@ -911,7 +911,7 @@ export async function handler(
     // Validate lite subscription billing
     if (opts.modelList === "lite" && authInfo.billing.lite && authInfo.lite) {
       try {
-        const consoleGoUrl = `https://opencode.ai/workspace/${authInfo.workspaceID}/go`
+        const consoleGoUrl = `https://nexus.ai/workspace/${authInfo.workspaceID}/go`
         const sub = authInfo.lite
         const liteData = LiteData.getLimits()
 
@@ -982,8 +982,8 @@ export async function handler(
 
     // Validate pay as you go billing
     const billing = authInfo.billing
-    const billingUrl = `https://opencode.ai/workspace/${authInfo.workspaceID}/billing`
-    const membersUrl = `https://opencode.ai/workspace/${authInfo.workspaceID}/members`
+    const billingUrl = `https://nexus.ai/workspace/${authInfo.workspaceID}/billing`
+    const membersUrl = `https://nexus.ai/workspace/${authInfo.workspaceID}/members`
     if (!billing.paymentMethodID && billing.balance <= 0)
       throw new CreditsError(t("zen.api.error.noPaymentMethod", { billingUrl }))
     if (billing.balance <= 0) throw new CreditsError(t("zen.api.error.insufficientBalance", { billingUrl }))

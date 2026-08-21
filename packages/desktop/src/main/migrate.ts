@@ -32,10 +32,10 @@ function tauriAppId() {
 }
 
 // Migrate a single Tauri .dat file into the corresponding electron-store.
-// `dev-hub.settings.dat` is special: it maps to the `dev-hub.settings` store
+// `nexus.settings.dat` is special: it maps to the `nexus.settings` store
 // (the electron-store name without the `.dat` extension). All other .dat files
 // keep their full filename as the electron-store name so they match what the
-// renderer already passes via IPC (e.g. `"default.dat"`, `"dev-hub.global.dat"`).
+// renderer already passes via IPC (e.g. `"default.dat"`, `"nexus.global.dat"`).
 function migrateFile(datPath: string, filename: string) {
   let data: Record<string, unknown>
   try {
@@ -45,10 +45,10 @@ function migrateFile(datPath: string, filename: string) {
     return
   }
 
-  // dev-hub.settings.dat → the electron settings store ("dev-hub.settings").
+  // nexus.settings.dat → the electron settings store ("nexus.settings").
   // All other .dat files keep their full filename as the store name so they match
-  // what the renderer passes via IPC (e.g. "default.dat", "dev-hub.global.dat").
-  const storeName = filename === "dev-hub.settings.dat" ? "dev-hub.settings" : filename
+  // what the renderer passes via IPC (e.g. "default.dat", "nexus.global.dat").
+  const storeName = filename === "nexus.settings.dat" ? "nexus.settings" : filename
   const target = getStore(storeName)
   const migrated: string[] = []
   const skipped: string[] = []

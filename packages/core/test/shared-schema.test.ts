@@ -1,35 +1,35 @@
 import { expect, test } from "bun:test"
 import { Schema } from "effect"
-import { AgentV2 } from "@opencode-ai/core/agent"
-import { ModelV2 } from "@opencode-ai/core/model"
-import { SessionV2 } from "@opencode-ai/core/session"
-import { Agent } from "@opencode-ai/schema/agent"
-import { Location } from "@opencode-ai/schema/location"
-import { Model } from "@opencode-ai/schema/model"
-import { AgentAttachment, FileAttachment, Prompt, Source } from "@opencode-ai/schema/prompt"
-import { Provider } from "@opencode-ai/schema/provider"
-import { Project } from "@opencode-ai/schema/project"
-import { ProjectDirectories } from "@opencode-ai/schema/project-directories"
-import { PermissionV1 } from "@opencode-ai/schema/permission-v1"
-import { Session } from "@opencode-ai/schema/session"
-import { SessionInput } from "@opencode-ai/schema/session-input"
-import { SessionMessage } from "@opencode-ai/schema/session-message"
-import { Workspace } from "@opencode-ai/schema/workspace"
-import { Command } from "@opencode-ai/schema/command"
-import { Connection } from "@opencode-ai/schema/connection"
-import { Credential } from "@opencode-ai/schema/credential"
-import { FileSystem } from "@opencode-ai/schema/filesystem"
-import { Integration } from "@opencode-ai/schema/integration"
-import { LLM } from "@opencode-ai/schema/llm"
-import { Permission } from "@opencode-ai/schema/permission"
-import { Plugin } from "@opencode-ai/schema/plugin"
-import { Pty } from "@opencode-ai/schema/pty"
-import { Reference } from "@opencode-ai/schema/reference"
-import { SessionTodo } from "@opencode-ai/schema/session-todo"
-import { Skill } from "@opencode-ai/schema/skill"
-import { AbsolutePath, DateTimeUtcFromMillis, optional, statics } from "@opencode-ai/schema/schema"
-import { ProviderV2 } from "@opencode-ai/core/provider"
-import { PluginV2 } from "@opencode-ai/core/plugin"
+import { AgentV2 } from "@nexus-ai/core/agent"
+import { ModelV2 } from "@nexus-ai/core/model"
+import { SessionV2 } from "@nexus-ai/core/session"
+import { Agent } from "@nexus-ai/schema/agent"
+import { Location } from "@nexus-ai/schema/location"
+import { Model } from "@nexus-ai/schema/model"
+import { AgentAttachment, FileAttachment, Prompt, Source } from "@nexus-ai/schema/prompt"
+import { Provider } from "@nexus-ai/schema/provider"
+import { Project } from "@nexus-ai/schema/project"
+import { ProjectDirectories } from "@nexus-ai/schema/project-directories"
+import { PermissionV1 } from "@nexus-ai/schema/permission-v1"
+import { Session } from "@nexus-ai/schema/session"
+import { SessionInput } from "@nexus-ai/schema/session-input"
+import { SessionMessage } from "@nexus-ai/schema/session-message"
+import { Workspace } from "@nexus-ai/schema/workspace"
+import { Command } from "@nexus-ai/schema/command"
+import { Connection } from "@nexus-ai/schema/connection"
+import { Credential } from "@nexus-ai/schema/credential"
+import { FileSystem } from "@nexus-ai/schema/filesystem"
+import { Integration } from "@nexus-ai/schema/integration"
+import { LLM } from "@nexus-ai/schema/llm"
+import { Permission } from "@nexus-ai/schema/permission"
+import { Plugin } from "@nexus-ai/schema/plugin"
+import { Pty } from "@nexus-ai/schema/pty"
+import { Reference } from "@nexus-ai/schema/reference"
+import { SessionTodo } from "@nexus-ai/schema/session-todo"
+import { Skill } from "@nexus-ai/schema/skill"
+import { AbsolutePath, DateTimeUtcFromMillis, optional, statics } from "@nexus-ai/schema/schema"
+import { ProviderV2 } from "@nexus-ai/core/provider"
+import { PluginV2 } from "@nexus-ai/core/plugin"
 
 test("Core reuses the canonical shared schemas", async () => {
   const [
@@ -55,27 +55,27 @@ test("Core reuses the canonical shared schemas", async () => {
     coreSchema,
     coreWorkspace,
   ] = await Promise.all([
-    import("@opencode-ai/core/command"),
-    import("@opencode-ai/core/integration/connection"),
-    import("@opencode-ai/core/credential"),
-    import("@opencode-ai/core/filesystem"),
-    import("@opencode-ai/core/integration"),
-    import("@opencode-ai/core/location"),
-    import("@opencode-ai/llm"),
-    import("@opencode-ai/core/permission"),
-    import("@opencode-ai/core/v1/permission"),
-    import("@opencode-ai/core/project/copy"),
-    import("@opencode-ai/core/pty"),
-    import("@opencode-ai/core/project/schema"),
-    import("@opencode-ai/core/reference"),
-    import("@opencode-ai/core/session/input"),
-    import("@opencode-ai/core/session/message"),
-    import("@opencode-ai/core/session/todo"),
-    import("@opencode-ai/core/session/prompt"),
-    import("@opencode-ai/core/skill"),
-    import("@opencode-ai/core/v2-schema"),
-    import("@opencode-ai/core/schema"),
-    import("@opencode-ai/core/workspace"),
+    import("@nexus-ai/core/command"),
+    import("@nexus-ai/core/integration/connection"),
+    import("@nexus-ai/core/credential"),
+    import("@nexus-ai/core/filesystem"),
+    import("@nexus-ai/core/integration"),
+    import("@nexus-ai/core/location"),
+    import("@nexus-ai/llm"),
+    import("@nexus-ai/core/permission"),
+    import("@nexus-ai/core/v1/permission"),
+    import("@nexus-ai/core/project/copy"),
+    import("@nexus-ai/core/pty"),
+    import("@nexus-ai/core/project/schema"),
+    import("@nexus-ai/core/reference"),
+    import("@nexus-ai/core/session/input"),
+    import("@nexus-ai/core/session/message"),
+    import("@nexus-ai/core/session/todo"),
+    import("@nexus-ai/core/session/prompt"),
+    import("@nexus-ai/core/skill"),
+    import("@nexus-ai/core/v2-schema"),
+    import("@nexus-ai/core/schema"),
+    import("@nexus-ai/core/workspace"),
   ])
 
   const schemas = [

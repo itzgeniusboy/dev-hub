@@ -1,8 +1,8 @@
 export function hasExistingAppState(entries: Array<{ name: string; isDirectory: () => boolean }>) {
   return entries.some((entry) => {
-    if (entry.name === "dev-hub.settings") return true
+    if (entry.name === "nexus.settings") return true
     if (entry.name.endsWith(".dat")) return true
     if (/^window-state-.+\.json$/.test(entry.name)) return true
-    return entry.isDirectory() && entry.name === "dev-hub"
+    return entry.isDirectory() && entry.name === "nexus"
   })
 }

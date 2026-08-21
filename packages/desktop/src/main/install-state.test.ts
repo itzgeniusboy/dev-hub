@@ -10,10 +10,10 @@ describe("hasExistingAppState", () => {
     expect(hasExistingAppState([file("Local State"), directory("Crashpad")])).toBe(false)
   })
 
-  test("recognizes state written by an earlier OpenCode launch", () => {
-    expect(hasExistingAppState([file("dev-hub.settings")])).toBe(true)
-    expect(hasExistingAppState([file("dev-hub.global.dat")])).toBe(true)
+  test("recognizes state written by an earlier NEXUS launch", () => {
+    expect(hasExistingAppState([file("nexus.settings")])).toBe(true)
+    expect(hasExistingAppState([file("nexus.global.dat")])).toBe(true)
     expect(hasExistingAppState([file("window-state-abc.json")])).toBe(true)
-    expect(hasExistingAppState([directory("dev-hub")])).toBe(true)
+    expect(hasExistingAppState([directory("nexus")])).toBe(true)
   })
 })
