@@ -91,6 +91,7 @@
     "@nexus-ai/server": "workspace:*",
     "@nexus-ai/tui": "workspace:*",
     "@nexus/git-pro": "workspace:*",
+    "@nexus/modding": "workspace:*",
     "@nexus/termux-api": "workspace:*",
     "@nexus/termux-core": "workspace:*",
     "@nexus/test-runner": "workspace:*",

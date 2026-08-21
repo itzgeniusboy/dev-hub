@@ -36,6 +36,7 @@ import { DevCommand } from "./cli/cmd/dev"
 import { LiaisonCommand } from "./cli/cmd/liaison"
 import { ApiCommand } from "./cli/cmd/api"
 import { Heap } from "./cli/heap"
+import { ModCommand } from "./cli/cmd/mod"
 
 const args = hideBin(process.argv)
 
@@ -115,6 +116,7 @@ const cli = yargs(args)
   .command(DevCommand)
   .command(LiaisonCommand)
   .command(ApiCommand)
+  .command(ModCommand)
   .fail((msg, err) => {
     if (
       msg?.startsWith("Unknown argument") ||
