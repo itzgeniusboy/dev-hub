@@ -1,0 +1,13 @@
+{
+  "name": "@dev-hub/termux-core",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "@types/node": "catalog:"
+  },
+  "main": "dist/index.js",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  }
+}
