@@ -1,6 +1,6 @@
 # NEXUS branding
 
-NEXUS is a branding fork of [NEXUS](https://github.com/anomalyco/nexus).
+NEXUS is a branding fork of [OpenCode](https://github.com/anomalyco/opencode).
 
 The UI layout, theme, colors, icons, and interaction behavior are intentionally unchanged.
 Only product naming, executable metadata, desktop metadata, and user-facing product copy were updated.
