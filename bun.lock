@@ -289,7 +289,7 @@
       "name": "@opencode-ai/core",
       "version": "1.18.19",
       "bin": {
-        "dev-hub": "./bin/opencode",
+        "opencode": "./bin/opencode",
       },
       "dependencies": {
         "@ai-sdk/alibaba": "1.0.17",
@@ -561,7 +561,7 @@
       "name": "dev-hub",
       "version": "1.18.19",
       "bin": {
-        "dev-hub": "./bin/opencode",
+        "dev-hub": "./bin/dev-hub",
       },
       "dependencies": {
         "@actions/core": "1.11.1",
