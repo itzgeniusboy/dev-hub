@@ -202,6 +202,7 @@ describe("i18n plural parity", () => {
 })
 
 async function dictionary(file: string) {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires, import/no-dynamic-require
   const module: unknown = await import(file)
   if (typeof module !== "object" || module === null || !("dict" in module) || !isDictionary(module.dict)) {
     throw new Error(`Invalid translation dictionary: ${file}`)

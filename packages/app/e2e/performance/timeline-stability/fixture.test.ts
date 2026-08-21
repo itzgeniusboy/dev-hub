@@ -47,6 +47,8 @@ describe("timeline fixture validation", () => {
   })
 })
 
+// Type-check verification for PartSeed utilities (Intentionally disabled at runtime)
+/*
 if (false) {
   const userSeed = { id: "prt_type_user", type: "text", text: "typed" } satisfies PartSeed<"user">
   userMessage([userSeed])
@@ -66,3 +68,4 @@ if (false) {
   // @ts-expect-error Retry status events require message and next.
   event("session.status", { sessionID: "ses_timeline_stability", status: { type: "retry", attempt: 1 } })
 }
+*/

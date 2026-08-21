@@ -152,7 +152,7 @@ describe("applyDirectoryEvent", () => {
     })
 
     expect(store.part_text_accum_delta.part).toBe("existing appended")
-    expect((store.part.message?.[0] as { text: string }).text).toBe("existing appended")
+    expect((store.part.message?.[0] as { text: string } | undefined)?.text).toBe("existing appended")
   })
 
   test("preserves a Home-specific retained session limit", () => {
