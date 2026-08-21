@@ -225,7 +225,7 @@ for (const item of targets) {
         name,
         version: Script.version,
         preferUnplugged: true,
-        os: [item.os],
+        os: item.os === "linux" ? ["linux", "android"] : [item.os],
         cpu: [item.arch],
         ...(item.abi ? { libc: [item.abi] } : {}),
       },

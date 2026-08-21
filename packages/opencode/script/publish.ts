@@ -66,7 +66,7 @@ await Bun.file(`./dist/${pkg.name}/package.json`).write(
       },
       version: version,
       license: pkg.license,
-      os: ["darwin", "linux", "win32"],
+      os: ["darwin", "linux", "win32", "android"],
       cpu: ["arm64", "x64"],
       optionalDependencies: binaries,
     },
