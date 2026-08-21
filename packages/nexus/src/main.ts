@@ -37,6 +37,8 @@ import { LiaisonCommand } from "./cli/cmd/liaison"
 import { ApiCommand } from "./cli/cmd/api"
 import { Heap } from "./cli/heap"
 import { ModCommand } from "./cli/cmd/mod"
+import { AssetCommand } from "./cli/cmd/asset"
+import { LuaCommand } from "./cli/cmd/lua"
 
 const args = hideBin(process.argv)
 
@@ -117,6 +119,8 @@ const cli = yargs(args)
   .command(LiaisonCommand)
   .command(ApiCommand)
   .command(ModCommand)
+  .command(AssetCommand)
+  .command(LuaCommand)
   .fail((msg, err) => {
     if (
       msg?.startsWith("Unknown argument") ||

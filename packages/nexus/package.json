@@ -90,6 +90,7 @@
     "@nexus-ai/sdk": "workspace:*",
     "@nexus-ai/server": "workspace:*",
     "@nexus-ai/tui": "workspace:*",
+    "@nexus/asset-reader": "workspace:*",
     "@nexus/git-pro": "workspace:*",
     "@nexus/modding": "workspace:*",
     "@nexus/termux-api": "workspace:*",
