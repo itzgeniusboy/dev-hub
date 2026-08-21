@@ -286,14 +286,48 @@ export async function checkKey(providerInput: string, key: string): Promise<{ st
   }
 }
 
-export async function verifyAllVaultKeys(): Promise<void> {
-  const vault = loadApiVault()
-  for (const [prov, entries] of Object.entries(vault.providers)) {
-    for (const entry of entries) {
-      if (entry.status === "invalid") continue
-      const { status } = await checkKey(prov, entry.key)
-      if (status !== "unknown") updateApiKeyStatus(prov, entry.key, status)
+let cachedVaultStatus: Record<string, ApiKeyEntry> | null = null
+let lastVaultCacheTime = 0
+
+export function getCachedKeyStatus(key: string): ApiKeyEntry | undefined {
+  const now = Date.now()
+  if (!cachedVaultStatus || now - lastVaultCacheTime > 5000) {
+    const vault = loadApiVault()
+    const map: Record<string, ApiKeyEntry> = {}
+    for (const entries of Object.values(vault.providers)) {
+      for (const entry of entries) {
+        map[entry.key] = entry
+      }
     }
+    cachedVaultStatus = map
+    lastVaultCacheTime = now
+  }
+  return cachedVaultStatus[key]
+}
+
+let verificationInProgress = false
+export async function verifyAllVaultKeys(): Promise<void> {
+  if (verificationInProgress) return
+  verificationInProgress = true
+  try {
+    const vault = loadApiVault()
+    const tasks: Promise<void>[] = []
+    for (const [prov, entries] of Object.entries(vault.providers)) {
+      for (const entry of entries) {
+        if (entry.status === "invalid") continue
+        
+        // Skip check if recently checked (within 5 minutes)
+        if (entry.lastChecked && Date.now() - Date.parse(entry.lastChecked) < 5 * 60 * 1000) continue
+        
+        tasks.push((async () => {
+          const { status } = await checkKey(prov, entry.key)
+          if (status !== "unknown") updateApiKeyStatus(prov, entry.key, status)
+        })())
+      }
+    }
+    await Promise.all(tasks)
+  } finally {
+    verificationInProgress = false
   }
 }
 
@@ -302,6 +336,8 @@ export function resetApiVaultForTests(): void {
   if (fs.existsSync(file)) fs.unlinkSync(file)
   const usage = apiUsagePath()
   if (fs.existsSync(usage)) fs.unlinkSync(usage)
+  cachedVaultStatus = null
+  lastVaultCacheTime = 0
 }
 
 export { emptyVault }

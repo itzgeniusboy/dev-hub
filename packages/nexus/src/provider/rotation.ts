@@ -1,5 +1,7 @@
 export type RotatingKeys = Record<string, string[] | undefined>
 
+import { getCachedKeyStatus } from "../api/ApiVault"
+
 /**
  * Selects configured credentials in a deterministic round-robin order.
  * The engine is intentionally in-memory; secrets remain in NEXUS config/auth storage.
@@ -14,12 +16,61 @@ export class RotationEngine {
 
   next(providerID: string): string | undefined {
     if (!this.enabled) return undefined
-    const values = keyValues(this.keys, providerID).filter((value) => typeof value === "string" && value.trim().length > 0)
-    if (values.length === 0) return undefined
-    const position = this.positions.get(providerID) ?? 0
-    const value = values[position % values.length]
-    this.positions.set(providerID, (position + 1) % values.length)
-    return value
+    const allValues = keyValues(this.keys, providerID).filter((value) => typeof value === "string" && value.trim().length > 0)
+    if (allValues.length === 0) return undefined
+
+    // Determine how many healthy keys exist to decide if we can afford to skip rate-limited ones
+    const now = Date.now()
+    // First, filter out invalid/suspended completely
+    const eligibleValues = allValues.filter(val => {
+      const status = getCachedKeyStatus(val)
+      if (!status) return true
+      if (status.status === "invalid") return false
+      if (status.status === "suspended" && status.suspendedUntil && Date.parse(status.suspendedUntil) > now) return false
+      return true
+    })
+    
+    if (eligibleValues.length === 0) return undefined
+    
+    const healthyCount = eligibleValues.filter(val => {
+      const status = getCachedKeyStatus(val)
+      return !status || status.status !== "rate_limited"
+    }).length
+
+    let position = this.positions.get(providerID) ?? 0
+    let attempts = 0
+    let selectedValue: string | undefined = undefined
+
+    // Determine target pool: if healthyCount > 0, we only pick from healthy keys.
+    // If healthyCount === 0, we pick from all eligible (which means they are all rate_limited).
+    const targetPool = healthyCount > 0 
+      ? eligibleValues.filter(val => {
+          const status = getCachedKeyStatus(val)
+          return !status || status.status !== "rate_limited"
+        })
+      : eligibleValues
+
+    // A simpler approach: iterate over allValues starting from position, and pick the first one that is in targetPool.
+    while (attempts < allValues.length) {
+      const index = position % allValues.length
+      const value = allValues[index]
+      position++
+      attempts++
+      
+      if (targetPool.includes(value)) {
+        selectedValue = value
+        // Update the position in the map to the index *after* the one we just picked,
+        // so the next call starts searching from the subsequent key.
+        this.positions.set(providerID, (index + 1) % allValues.length)
+        break
+      }
+    }
+
+    if (selectedValue !== undefined) {
+      return selectedValue
+    }
+
+    return undefined
   }
 
   has(providerID: string): boolean {

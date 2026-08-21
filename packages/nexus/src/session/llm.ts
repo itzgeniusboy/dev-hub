@@ -455,6 +455,11 @@ const live: Layer.Layer<
                   return yield* Effect.failCause(modelExit.cause)
                 }
                 const current = yield* toStream(modelExit.value)
+                
+                // Hook to reset failures on success
+                yield* Effect.promise(() => Promise.resolve(
+                  updateApiKeyStatus(candidate.providerID, currentUsedKey, "active")
+                ))
 
                 return current.pipe(
                   Stream.catchCause((cause) => {
