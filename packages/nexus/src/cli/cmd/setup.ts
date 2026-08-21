@@ -54,9 +54,13 @@ function setupSafeURL(url: string) {
 }
 
 async function setupResponseOK(provider: string, response: Response, url: string) {
-  if (!response.ok && setupDebugEnabled()) {
-    const body = await response.clone().text().catch(() => "<unreadable response body>")
-    console.error(`[NEXUS API] setup provider=${provider} status=${response.status} url=${setupSafeURL(url)} body=${body.slice(0, 2000)}`)
+  console.log(`Response status: ${response.status}`)
+  if (!response.ok) {
+    if (setupDebugEnabled()) {
+      const body = await response.clone().text().catch(() => "<unreadable response body>")
+      console.error(`[NEXUS API] setup provider=${provider} status=${response.status} url=${setupSafeURL(url)} body=${body.slice(0, 2000)}`)
+    }
+    console.error(`❌ Key invalid / network error (HTTP ${response.status})`)
   }
   return response.ok
 }
@@ -64,6 +68,8 @@ async function setupResponseOK(provider: string, response: Response, url: string
 async function validateKey(provider: KeyProvider, key: string): Promise<boolean> {
   const normalizedKey = typeof key === "string" ? key.trim() : ""
   if (!normalizedKey) return false
+
+  console.log(`Testing key: ${normalizedKey.slice(0, 5)}...`)
 
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 12_000)
@@ -114,6 +120,7 @@ async function validateKey(provider: KeyProvider, key: string): Promise<boolean>
     return setupResponseOK(provider, testResponse, testURL)
   } catch (error) {
     if (setupDebugEnabled()) console.error(`[NEXUS API] setup fetch error provider=${provider} error=${String(error)}`)
+    console.error(`❌ Key invalid / network error: ${String(error)}`)
     return false
   } finally {
     clearTimeout(timeout)
