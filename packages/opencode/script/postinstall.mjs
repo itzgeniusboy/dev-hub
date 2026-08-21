@@ -168,6 +168,12 @@ function copyBinary(source, target) {
 }
 
 function verifyBinary() {
+  if (os.platform() === "android") {
+    // Termux/Android cannot natively execute the glibc Linux ARM64 binary.
+    // We soft-fail the verification to allow the npm installation to complete,
+    // matching the official OpenCode behavior on Termux.
+    return true
+  }
   const result = childProcess.spawnSync(targetBinary, ["--version"], {
     encoding: "utf8",
     stdio: "ignore",
@@ -184,6 +190,11 @@ function main() {
     } catch {
       if (installPackage(name) && verifyBinary()) return
     }
+  }
+
+  if (os.platform() === "android") {
+    console.warn("dev-hub-ai installed on Android/Termux. Native binary may require glibc-runner or PRoot to execute.");
+    return
   }
 
   throw new Error(
