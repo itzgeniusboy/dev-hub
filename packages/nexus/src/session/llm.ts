@@ -366,9 +366,30 @@ const live: Layer.Layer<
             )
 
             const alternatives = yield* provider.fallbackModels(input.model.providerID)
+            const ModelRouter = yield* Effect.promise(() => import("@/api/ModelRouter"))
+            const alias = ModelRouter.resolveModelAlias(input.model.id)
+            const compatibleRoutes = ModelRouter.routeModel(alias, { includeLocal: false })
+            
+            // Build the exact model candidates (same logical model, multiple providers)
+            const exactCandidates: Array<{ providerID: ProviderV2.ID; modelID: ModelV2.ID }> = []
+            // Add the originally requested provider/model first
+            exactCandidates.push({ providerID: input.model.providerID, modelID: input.model.id })
+            
+            // Add other providers that can serve the exact same model alias
+            for (const route of compatibleRoutes) {
+              if (route.provider !== "ollama" && route.provider !== input.model.providerID) {
+                exactCandidates.push({ providerID: route.provider as ProviderV2.ID, modelID: route.model as ModelV2.ID })
+              }
+            }
+            
+            // Filter alternatives to remove ones we already included in exactCandidates
+            const filteredAlternatives = alternatives.filter(alt => 
+              !exactCandidates.some(ec => ec.providerID === alt.providerID && ec.modelID === alt.modelID)
+            )
+
             const candidates = [
-              { providerID: input.model.providerID, modelID: input.model.id },
-              ...alternatives,
+              ...exactCandidates,
+              ...filteredAlternatives,
             ] as const
 
             const toStream = (model: Provider.Model) =>
