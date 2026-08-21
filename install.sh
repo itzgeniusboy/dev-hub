@@ -267,15 +267,24 @@ download_and_install() {
     fi
 
     tar -xzf "$tmp_dir/$filename" -C "$tmp_dir"
-    if [ ! -f "$tmp_dir/nexus" ]; then
-        rm -rf "$tmp_dir"
-        echo -e "${RED}Downloaded archive does not contain a nexus executable.${NC}"
-        exit 1
+    
+    local extracted_bin="$tmp_dir/nexus"
+    if [ ! -f "$extracted_bin" ]; then
+        # The new archive packs it as nexus-x64 or nexus depending on the architecture
+        if [ -f "$tmp_dir/nexus-x64" ]; then
+            extracted_bin="$tmp_dir/nexus-x64"
+        elif [ -f "$tmp_dir/nexus-arm64" ]; then
+            extracted_bin="$tmp_dir/nexus-arm64"
+        else
+            rm -rf "$tmp_dir"
+            echo -e "${RED}Downloaded archive does not contain a nexus executable.${NC}"
+            exit 1
+        fi
     fi
 
     install_termux_runtime
     if [ "$is_termux" = "true" ]; then
-        mv "$tmp_dir/nexus" "$INSTALL_DIR/nexus.bin"
+        mv "$extracted_bin" "$INSTALL_DIR/nexus.bin"
         cat > "$INSTALL_DIR/nexus" <<'EOF'
 #!/usr/bin/env bash
 set -e
@@ -322,7 +331,7 @@ exec "$LOADER" --library-path "$LIBRARY_PATH" "$SCRIPT_DIR/nexus.bin" "$@"
 EOF
         chmod 755 "$INSTALL_DIR/nexus.bin" "$INSTALL_DIR/nexus"
     else
-        mv "$tmp_dir/nexus" "$INSTALL_DIR/nexus"
+        mv "$extracted_bin" "$INSTALL_DIR/nexus"
         chmod 755 "$INSTALL_DIR/nexus"
     fi
     rm -rf "$tmp_dir"
