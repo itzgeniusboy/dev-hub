@@ -26,6 +26,12 @@ export class RotationEngine {
     return this.enabled && keyValues(this.keys, providerID).some((value) => value.trim().length > 0)
   }
 
+  /** Number of distinct non-empty keys available for this provider's rotation cycle. */
+  keyCount(providerID: string): number {
+    if (!this.enabled) return 0
+    return keyValues(this.keys, providerID).filter((value) => typeof value === "string" && value.trim().length > 0).length
+  }
+
   static isRateLimited(error: unknown): boolean {
     const message = error instanceof Error ? error.message : String(error)
     return /rate.?limit|too many requests|quota exceeded|freeusagelimit/i.test(message)
@@ -34,7 +40,7 @@ export class RotationEngine {
   /** Provider failures that should advance to another configured engine. */
   static isFallbackable(error: unknown): boolean {
     const message = error instanceof Error ? error.message : String(error)
-    return /rate.?limit|too many requests|quota exceeded|freeusagelimit|(?:model|resource).*(?:not found|does not exist|do not have access)|(?:invalid|missing).*(?:api key|authentication)|unauthorized|forbidden|invalid api key|missing authentication header/i.test(
+    return /rate.?limit|too many requests|quota exceeded|freeusagelimit|(?:model|resource).*(?:not found|does not exist|do not have access)|(?:not found|does not exist).*(?:model|resource)|invalid[_ -]?api[_ -]?key|api[_ -]?key.*invalid|(?:invalid|missing).*(?:authentication|credentials)|unauthorized|forbidden|missing authentication header|(?:status|http|error)?\s*[:(]?\s*(?:401|403|404|429)\b|unexpected server error|failed to fetch/i.test(
       message,
     )
   }

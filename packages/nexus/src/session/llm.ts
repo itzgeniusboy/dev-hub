@@ -387,26 +387,41 @@ const live: Layer.Layer<
                 )
               })
 
-            const attempt = (remaining: ReadonlyArray<{ providerID: ProviderV2.ID; modelID: ModelV2.ID }>): Effect.Effect<Stream.Stream<LLMEvent, unknown>> =>
+                        const attempt = (remaining: ReadonlyArray<{ providerID: ProviderV2.ID; modelID: ModelV2.ID }>, retryCount = 0): Effect.Effect<Stream.Stream<LLMEvent, unknown>> =>
               Effect.gen(function* () {
                 const [candidate, ...rest] = remaining
                 if (!candidate) return yield* Effect.dieMessage("No fallback model is available")
+                
+                // Retry the same provider only while its active key rotation has
+                // untried keys. This prevents cycling back to key 1 before switching.
                 const nextFallback = (cause: unknown) => {
                   let message = typeof cause === "string" ? cause : (cause instanceof Error ? cause.message : String(cause))
                   try { message = Cause.pretty(cause as any) } catch (e) {}
-                  if (!RotationEngine.isFallbackable(message) || rest.length === 0) return undefined
-                  const next = rest[0]
+                  if (!RotationEngine.isFallbackable(message)) return undefined
+                  
                   return Effect.gen(function* () {
-                    yield* Effect.logWarning("provider failed; switching model", {
+                    const sameProviderKeyCount = yield* provider.rotationKeyCount(candidate.providerID)
+                    if (sameProviderKeyCount > retryCount + 1) {
+                      yield* Effect.logWarning("provider failed; retrying same provider with next key", {
+                        providerID: candidate.providerID,
+                        modelID: candidate.modelID,
+                        retryCount: retryCount + 1,
+                        availableKeys: sameProviderKeyCount,
+                      })
+                      return yield* attempt(remaining, retryCount + 1)
+                    }
+                    
+                    if (rest.length === 0) return yield* Effect.failCause(cause as Cause.Cause<unknown>)
+                    const next = rest[0]
+                    yield* Effect.logWarning("provider exhausted; switching model", {
                       fromProviderID: candidate.providerID,
                       fromModelID: candidate.modelID,
                       toProviderID: next.providerID,
                       toModelID: next.modelID,
                     })
-                    return yield* attempt(rest)
+                    return yield* attempt(rest, 0)
                   })
                 }
-
                 const modelExit = yield* Effect.exit(provider.getModel(candidate.providerID, candidate.modelID))
                 if (Exit.isFailure(modelExit)) {
                   const fallback = nextFallback(modelExit.cause)

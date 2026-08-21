@@ -1260,6 +1260,7 @@ export interface Interface {
   readonly fallbackModels: (
     excludeProviderID: ProviderV2.ID,
   ) => Effect.Effect<ReadonlyArray<{ providerID: ProviderV2.ID; modelID: ModelV2.ID }>>
+  readonly rotationKeyCount: (providerID: ProviderV2.ID) => Effect.Effect<number>
 }
 
 interface State {
@@ -2154,6 +2155,10 @@ const layer = Layer.effect(
       }
     })
 
+    const rotationKeyCount = Effect.fn("Provider.rotationKeyCount")(function* (providerID: ProviderV2.ID) {
+      const s = yield* InstanceState.get(state)
+      return s.rotation.keyCount(providerID)
+    })
     const fallbackModels = Effect.fn("Provider.fallbackModels")(function* (excludeProviderID: ProviderV2.ID) {
       const cfg = yield* config.get()
       const effectiveApiKeys = mergeApiVaultKeys(cfg.api_keys)
@@ -2179,7 +2184,7 @@ const layer = Layer.effect(
         })
     })
 
-    return Service.of({ list, getProvider, getModel, getLanguage, closest, getSmallModel, defaultModel, fallbackModels })
+    return Service.of({ list, getProvider, getModel, getLanguage, closest, getSmallModel, defaultModel, fallbackModels, rotationKeyCount })
   }),
 )
 
