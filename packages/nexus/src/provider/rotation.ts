@@ -36,13 +36,14 @@ export const PROVIDER_FALLBACK_ORDER = ["groq", "openrouter", "google", "ollama"
 
 /** Canonical low-cost/free model order used by setup, default selection, and model tests. */
 export const PREFERRED_MODELS = {
-  groq: ["llama-3.1-8b-instant", "llama-3.3-70b-versatile", "mixtral-8x7b-32768"],
+  groq: ["llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it"],
   openrouter: [
     "meta-llama/llama-3.1-8b-instruct:free",
     "google/gemma-2b-it:free",
     "mistralai/mistral-7b-instruct:free",
+    "nousresearch/hermes-3-llama-3.1-405b:free",
   ],
-  google: ["gemini-1.5-flash", "gemini-1.5-pro", "gemini-1.5-flash-8b"],
+  google: ["gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-1.5-pro"],
 } as const
 
 export type PreferredProvider = keyof typeof PREFERRED_MODELS

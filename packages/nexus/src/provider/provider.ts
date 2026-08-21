@@ -98,6 +98,47 @@ function timeoutController(ms: number) {
   }
 }
 
+function apiDebugEnabled() {
+  return process.env.NEXUS_DEBUG_API === "1"
+}
+
+function safeApiURL(input: unknown): string {
+  const raw = typeof input === "string" ? input : input instanceof Request ? input.url : String(input)
+  return raw.replace(/([?&](?:key|api[_-]?key|token)=)[^&]+/gi, "$1<redacted>")
+}
+
+function apiHeaderSummary(input: unknown, init?: RequestInit) {
+  const headers = new Headers(input instanceof Request ? input.headers : undefined)
+  if (init?.headers) {
+    for (const [key, value] of new Headers(init.headers).entries()) headers.set(key, value)
+  }
+  const authorization = headers.get("authorization")
+  const googleKey = headers.get("x-goog-api-key")
+  const secret = authorization ?? googleKey
+  return {
+    authorization: authorization ? `Bearer …${authorization.slice(-5)}` : undefined,
+    "x-goog-api-key": googleKey ? `…${googleKey.slice(-5)}` : undefined,
+    secretTail: secret ? secret.slice(-5) : "none",
+    names: Array.from(headers.keys()).join(","),
+  }
+}
+
+function apiBodySummary(init?: RequestInit) {
+  if (typeof init?.body !== "string") return { model: undefined, keys: [] as string[] }
+  try {
+    const parsed = JSON.parse(init.body) as Record<string, unknown>
+    return { model: typeof parsed.model === "string" ? parsed.model : undefined, keys: Object.keys(parsed) }
+  } catch {
+    return { model: undefined, keys: ["<non-json-body>"] }
+  }
+}
+
+async function debugApiResponse(response: Response, url: string) {
+  if (!apiDebugEnabled()) return
+  const body = await response.clone().text().catch(() => "<unreadable response body>")
+  console.error(`[NEXUS API] response status=${response.status} url=${url} body=${body.slice(0, 2000)}`)
+}
+
 function googleVertexAnthropicBaseURL(project: string | undefined, location: string | undefined) {
   if (!project) return
   if (location !== "eu" && location !== "us") return
@@ -1794,6 +1835,14 @@ const layer = Layer.effect(
         options["fetch"] = async (input: any, init?: BunFetchRequestInit) => {
           const fetchFn = customFetch ?? fetch
           const opts = init ?? {}
+          const debugURL = safeApiURL(input)
+          if (apiDebugEnabled()) {
+            const headers = apiHeaderSummary(input, opts)
+            const body = apiBodySummary(opts)
+            console.error(
+              `[NEXUS API] request url=${debugURL} auth=${headers.authorization ?? "none"} x-goog-api-key=${headers["x-goog-api-key"] ?? "none"} secretTail=${headers.secretTail} headerNames=${headers.names} model=${body.model ?? "<blank>"} bodyKeys=${body.keys.join(",")}`,
+            )
+          }
           const chunkAbortCtl = typeof chunkTimeout === "number" && chunkTimeout > 0 ? new AbortController() : undefined
           const headerTimeoutMs = headerTimeout === false ? undefined : headerTimeout
           const headerTimeoutCtl = typeof headerTimeoutMs === "number" ? timeoutController(headerTimeoutMs) : undefined
@@ -1808,12 +1857,19 @@ const layer = Layer.effect(
           const combined = signals.length === 0 ? null : signals.length === 1 ? signals[0] : AbortSignal.any(signals)
           if (combined) opts.signal = combined
 
-          const res = await fetchFn(input, {
-            ...opts,
-            // @ts-ignore see here: https://github.com/oven-sh/bun/issues/16682
-            timeout: false,
-          }).finally(() => headerTimeoutCtl?.clear())
+          let res: Response
+          try {
+            res = await fetchFn(input, {
+              ...opts,
+              // @ts-ignore see here: https://github.com/oven-sh/bun/issues/16682
+              timeout: false,
+            }).finally(() => headerTimeoutCtl?.clear())
+          } catch (error) {
+            if (apiDebugEnabled()) console.error(`[NEXUS API] fetch error url=${debugURL} error=${String(error)}`)
+            throw error
+          }
 
+          await debugApiResponse(res, debugURL)
           if (!chunkAbortCtl) return res
           return wrapSSE(res, chunkTimeout, chunkAbortCtl)
         }

@@ -26,42 +26,91 @@ const PROVIDER_DEFINITIONS = {
   groq: {
     name: "Groq",
     api: "https://api.groq.com/openai/v1",
-    npm: "@ai-sdk/openai-compatible",
+    npm: "@ai-sdk/groq",
     models: freeModelDefinitions("groq"),
   },
   openrouter: {
     name: "OpenRouter",
     api: "https://openrouter.ai/api/v1",
-    npm: "@ai-sdk/openai-compatible",
+    npm: "@openrouter/ai-sdk-provider",
     models: freeModelDefinitions("openrouter"),
   },
   google: {
     name: "Gemini",
-    api: "https://generativelanguage.googleapis.com/v1beta/openai",
-    npm: "@ai-sdk/openai-compatible",
+    api: "https://generativelanguage.googleapis.com/v1beta",
+    npm: "@ai-sdk/google",
     models: freeModelDefinitions("google"),
   },
 } as const
 
 type KeyProvider = keyof typeof PROVIDER_DEFINITIONS
 
+function setupDebugEnabled() {
+  return process.env.NEXUS_DEBUG_API === "1"
+}
+
+function setupSafeURL(url: string) {
+  return url.replace(/([?&](?:key|api[_-]?key|token)=)[^&]+/gi, "$1<redacted>")
+}
+
+async function setupResponseOK(provider: string, response: Response, url: string) {
+  if (!response.ok && setupDebugEnabled()) {
+    const body = await response.clone().text().catch(() => "<unreadable response body>")
+    console.error(`[NEXUS API] setup provider=${provider} status=${response.status} url=${setupSafeURL(url)} body=${body.slice(0, 2000)}`)
+  }
+  return response.ok
+}
+
 async function validateKey(provider: KeyProvider, key: string): Promise<boolean> {
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 12_000)
   try {
-    const headers = { Authorization: `Bearer ${key}` }
-    let response: Response
-    if (provider === "groq") {
-      response = await fetch("https://api.groq.com/openai/v1/models", { headers, signal: controller.signal })
-    } else if (provider === "openrouter") {
-      response = await fetch("https://openrouter.ai/api/v1/models", { headers, signal: controller.signal })
-    } else {
-      response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`, {
+    const headers = { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }
+    if (provider === "groq" || provider === "openrouter") {
+      const baseURL = provider === "groq" ? "https://api.groq.com/openai/v1" : "https://openrouter.ai/api/v1"
+      const catalogURL = `${baseURL}/models`
+      const catalogResponse = await fetch(catalogURL, { headers, signal: controller.signal })
+      if (!(await setupResponseOK(provider, catalogResponse, catalogURL))) return false
+      const catalog = (await catalogResponse.json().catch(() => ({ data: [] }))) as { data?: Array<{ id?: string }> }
+      const ids = (catalog.data ?? []).map((item) => item.id).filter((id): id is string => Boolean(id))
+      const preferred = PREFERRED_MODELS[provider]
+      const model = preferred.find((id) => ids.includes(id)) ?? ids.find((id) => preferred.some((wanted) => id.startsWith(wanted.split(":")[0])))
+      if (!model) return false
+      const testURL = `${baseURL}/chat/completions`
+      const testResponse = await fetch(testURL, {
+        method: "POST",
+        headers,
         signal: controller.signal,
+        body: JSON.stringify({ model, messages: [{ role: "user", content: "Reply with exactly OK" }], max_tokens: 8 }),
       })
+      return setupResponseOK(provider, testResponse, testURL)
     }
-    return response.ok
-  } catch {
+
+    const catalogURL = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`
+    const catalogResponse = await fetch(catalogURL, { signal: controller.signal })
+    if (!(await setupResponseOK(provider, catalogResponse, catalogURL))) return false
+    const catalog = (await catalogResponse.json().catch(() => ({ models: [] }))) as {
+      models?: Array<{ name?: string; supportedGenerationMethods?: string[] }>
+    }
+    const ids = (catalog.models ?? [])
+      .filter((item) => item.supportedGenerationMethods?.includes("generateContent") ?? true)
+      .map((item) => item.name?.replace(/^models\//, ""))
+      .filter((id): id is string => Boolean(id))
+    const preferred = PREFERRED_MODELS.google
+    const model =
+      preferred.find((id) => ids.includes(id)) ??
+      ids.find((id) => /gemini-(?:2\.5|2\.0|1\.5)-flash(?:$|-)/i.test(id))
+    if (!model) return false
+    const testURL = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`
+    const testResponse = await fetch(testURL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify({ contents: [{ parts: [{ text: "Reply with exactly OK" }] }] }),
+    })
+    return setupResponseOK(provider, testResponse, testURL)
+  } catch (error) {
+    if (setupDebugEnabled()) console.error(`[NEXUS API] setup fetch error provider=${provider} error=${String(error)}`)
     return false
   } finally {
     clearTimeout(timeout)
