@@ -191,6 +191,12 @@ export const Info = Schema.Struct({
       policies: Schema.optional(Schema.mutable(Schema.Array(ConfigExperimental.Policy))).annotate({
         description: "Policy statements applied to supported resources, such as provider access",
       }),
+      semanticSearch: Schema.optional(Schema.Boolean),
+      gitPro: Schema.optional(Schema.Boolean),
+      testRunner: Schema.optional(Schema.Boolean),
+      selfHeal: Schema.optional(Schema.Boolean),
+      localLLM: Schema.optional(Schema.Boolean),
+      termuxAPI: Schema.optional(Schema.Boolean),
     }),
   ),
 }).annotate({ identifier: "Config" })

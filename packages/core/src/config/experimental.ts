@@ -15,4 +15,10 @@ export class Policy extends Schema.Class<Policy>("ConfigV2.Experimental.Policy")
 
 export class Experimental extends Schema.Class<Experimental>("ConfigV2.Experimental")({
   policies: Policy.pipe(Schema.Array, Schema.optional),
+  semanticSearch: Schema.Boolean.pipe(Schema.optional),
+  gitPro: Schema.Boolean.pipe(Schema.optional),
+  testRunner: Schema.Boolean.pipe(Schema.optional),
+  selfHeal: Schema.Boolean.pipe(Schema.optional),
+  localLLM: Schema.Boolean.pipe(Schema.optional),
+  termuxAPI: Schema.Boolean.pipe(Schema.optional),
 }) {}

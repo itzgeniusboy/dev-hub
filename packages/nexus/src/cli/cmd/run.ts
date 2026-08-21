@@ -283,9 +283,29 @@ export const RunCommand = effectCmd({
     const { RuntimeFlags } = yield* Effect.promise(() => import("@/effect/runtime-flags"))
     const { InstanceRef } = yield* Effect.promise(() => import("@/effect/instance-ref"))
     const { ServerAuth } = yield* Effect.promise(() => import("@/server/auth"))
+    const { Config } = yield* Effect.promise(() => import("@nexus-ai/core/config"))
     const agentSvc = yield* Agent.Service
     const flags = yield* RuntimeFlags.Service
     const localInstance = yield* InstanceRef
+    const config = yield* Config.Service
+    
+    // Lazy load Tier 1 experimental features if enabled
+    if (config.experimental?.semanticSearch) {
+      const { VectorSearch } = yield* Effect.promise(() => import("@nexus/vector-search"))
+      yield* VectorSearch.initialize()
+    }
+    if (config.experimental?.gitPro) {
+      const { GitPro } = yield* Effect.promise(() => import("@nexus/git-pro"))
+      yield* GitPro.initialize()
+    }
+    if (config.experimental?.testRunner) {
+      const { TestRunner } = yield* Effect.promise(() => import("@nexus/test-runner"))
+      yield* TestRunner.initialize()
+    }
+    if (config.experimental?.termuxAPI) {
+      const { TermuxAPI } = yield* Effect.promise(() => import("@nexus/termux-api"))
+      yield* TermuxAPI.initialize()
+    }
     yield* Effect.promise(async () => {
       const rawMessage = [...args.message, ...(args["--"] || [])].join(" ")
       const interactive = args.mini
