@@ -132,7 +132,7 @@ function installPackage(name) {
   try {
     const result = childProcess.spawnSync(
       "npm",
-      ["install", "--ignore-scripts", "--no-save", "--loglevel=error", "--prefix", temp, `${name}@${version}`],
+      ["install", "--ignore-scripts", "--include=optional", "--no-save", "--loglevel=error", "--prefix", temp, `${name}@${version}`],
       { stdio: "inherit", windowsHide: true },
     )
     if (result.status !== 0) return
