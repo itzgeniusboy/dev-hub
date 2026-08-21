@@ -215,7 +215,7 @@ check_version() {
         if [[ "$installed_version" == "$specific_version" ]]; then
             # On Termux, ensure the wrapper has the LD_PRELOAD fix before skipping
             if [ "$is_termux" = "true" ] && [ -f "$INSTALL_DIR/dev-hub" ]; then
-                if ! grep -q "ld-linux" "$INSTALL_DIR/dev-hub"; then
+                if ! grep -q "DEV_HUB_TERMUX_DIRECT_LOADER_V3" "$INSTALL_DIR/dev-hub"; then
                     print_message info "${MUTED}Version ${NC}$specific_version${MUTED} installed, but launcher needs update. Refreshing...${NC}"
                     return 0
                 fi
@@ -281,26 +281,46 @@ download_and_install() {
         cat > "$INSTALL_DIR/dev-hub" <<'EOF'
 #!/usr/bin/env bash
 set -e
-SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
-if ! command -v grun >/dev/null 2>&1; then
-    printf '%s\n' 'Dev Hub needs Termux glibc-runner. Install it with: pkg install glibc-repo glibc-runner' >&2
+# Resolve devhub/dev-hub symlinks so the companion binary is found in the install directory.
+SOURCE="$0"
+while [[ -h "$SOURCE" ]]; do
+    SOURCE_DIR="$(CDPATH= cd -- "$(dirname -- "$SOURCE")" && pwd)"
+    SOURCE="$(readlink "$SOURCE")"
+    [[ "$SOURCE" != /* ]] && SOURCE="$SOURCE_DIR/$SOURCE"
+done
+SCRIPT_DIR="$(CDPATH= cd -- "$(dirname -- "$SOURCE")" && pwd)"
+unset LD_PRELOAD
+GLIBC_PREFIX="${PREFIX:-}/glibc"
+if [[ ! -d "$GLIBC_PREFIX" ]]; then
+    printf '%s\n' 'Dev Hub needs Termux glibc support. Install it with: pkg install glibc-repo glibc-runner' >&2
     exit 1
 fi
-unset LD_PRELOAD
-if [[ -n "${PREFIX:-}" && -d "$PREFIX/glibc/bin" ]]; then
-    PATH="$PREFIX/glibc/bin:$PATH"
-    export PATH
+# DEV_HUB_TERMUX_DIRECT_LOADER_V3
+# The official runner exposes the dynamic loader as glibc/bin/ld.so. Some
+# package revisions also expose the architecture-specific loader in glibc/lib.
+LOADER=""
+for candidate in \
+    "$GLIBC_PREFIX/bin/ld.so" \
+    "$GLIBC_PREFIX/lib/ld-linux-aarch64.so.1" \
+    "$GLIBC_PREFIX/lib/ld-linux-x86-64.so.2" \
+    "$GLIBC_PREFIX/lib64/ld-linux-aarch64.so.1" \
+    "$GLIBC_PREFIX/lib64/ld-linux-x86-64.so.2"; do
+    if [[ -f "$candidate" && -x "$candidate" ]]; then
+        LOADER="$candidate"
+        break
+    fi
+done
+if [[ -z "$LOADER" ]]; then
+    printf '%s\n' 'Dev Hub could not find the Termux glibc dynamic loader.' >&2
+    printf '%s\n' "Expected: $GLIBC_PREFIX/bin/ld.so or $GLIBC_PREFIX/lib/ld-linux-*" >&2
+    printf '%s\n' 'Install it with: pkg install glibc-repo glibc-runner' >&2
+    exit 1
 fi
-# Direct loader invocation bypasses grun's strict flag parsing which fails on some versions
-ARCH="$(uname -m)"
-if [[ "$ARCH" == "aarch64" ]] && [[ -f "$PREFIX/glibc/lib/ld-linux-aarch64.so.1" ]]; then
-    exec "$PREFIX/glibc/lib/ld-linux-aarch64.so.1" --library-path "$PREFIX/glibc/lib" "$SCRIPT_DIR/dev-hub.bin" "$@"
-elif [[ "$ARCH" == "x86_64" ]] && [[ -f "$PREFIX/glibc/lib/ld-linux-x86-64.so.2" ]]; then
-    exec "$PREFIX/glibc/lib/ld-linux-x86-64.so.2" --library-path "$PREFIX/glibc/lib" "$SCRIPT_DIR/dev-hub.bin" "$@"
-else
-    # Fallback to grun if the direct loader isn't found
-    exec grun "$SCRIPT_DIR/dev-hub.bin" "$@"
+LIBRARY_PATH="$GLIBC_PREFIX/lib"
+if [[ -d "$GLIBC_PREFIX/lib64" ]]; then
+    LIBRARY_PATH="$LIBRARY_PATH:$GLIBC_PREFIX/lib64"
 fi
+exec "$LOADER" --library-path "$LIBRARY_PATH" "$SCRIPT_DIR/dev-hub.bin" "$@"
 EOF
         chmod 755 "$INSTALL_DIR/dev-hub.bin" "$INSTALL_DIR/dev-hub"
     else
@@ -390,13 +410,41 @@ fi
 
 install_command_alias() {
     local alias_dir
+    local -a alias_dirs=()
     if [ "$is_termux" = "true" ] && [ -n "${PREFIX:-}" ]; then
-        alias_dir="$PREFIX/bin"
+        alias_dirs+=("$PREFIX/bin")
     else
-        alias_dir="$HOME/.local/bin"
+        alias_dirs+=("$HOME/.local/bin")
     fi
-    mkdir -p "$alias_dir"
-    ln -sf "$INSTALL_DIR/dev-hub" "$alias_dir/devhub"
+
+    # Also repair stale launchers in any writable PATH directory. This matters
+    # when an older npm/global install shadows $PREFIX/bin/devhub.
+    local path_dir
+    local old_ifs="$IFS"
+    IFS=:
+    for path_dir in ${PATH:-}; do
+        if [[ "$path_dir" == "$INSTALL_DIR" ]]; then
+            continue
+        fi
+        if [[ -n "$path_dir" && -d "$path_dir" && -w "$path_dir" ]]; then
+            if [[ -e "$path_dir/devhub" || -L "$path_dir/devhub" || -e "$path_dir/dev-hub" || -L "$path_dir/dev-hub" ]]; then
+                alias_dirs+=("$path_dir")
+            fi
+        fi
+    done
+    IFS="$old_ifs"
+
+    local seen="|"
+    for alias_dir in "${alias_dirs[@]}"; do
+        case "$seen" in
+            *"|$alias_dir|"*) continue ;;
+        esac
+        seen="${seen}${alias_dir}|"
+        mkdir -p "$alias_dir"
+        rm -f "$alias_dir/devhub" "$alias_dir/dev-hub"
+        ln -s "$INSTALL_DIR/dev-hub" "$alias_dir/devhub"
+        ln -s "$INSTALL_DIR/dev-hub" "$alias_dir/dev-hub"
+    done
 }
 
 install_command_alias
