@@ -1,7 +1,7 @@
 import { RGBA, TextAttributes } from "@opentui/core"
 import { For, type JSX } from "solid-js"
 import { tint, useTheme } from "../context/theme"
-import { logo, logoGap } from "../logo"
+import { logo, logoSeparator } from "../logo"
 
 export function Logo() {
   const { theme } = useTheme()
@@ -52,8 +52,13 @@ export function Logo() {
         {(line, index) => (
           <box flexDirection="row">
             <box flexDirection="row">{renderLine(line, theme.textMuted, false)}</box>
-            <text fg={theme.background} bg={theme.background} selectable={false}>
-              {logoGap}
+            <text
+              fg={logoSeparator[index()] === "-" ? theme.text : theme.background}
+              bg={theme.background}
+              attributes={logoSeparator[index()] === "-" ? TextAttributes.BOLD : undefined}
+              selectable={false}
+            >
+              {logoSeparator[index()]}
             </text>
             <box flexDirection="row">{renderLine(logo.right[index()], theme.text, true)}</box>
           </box>

@@ -1,4 +1,4 @@
-export const logoGap = " "
+export const logoSeparator = [" ", " ", "-", " "] as const
 
 export const logo = {
   left: ["█▀▀▄ █▀▀▀ █__█", "█__█ █___ █__█", "█__█ █^^^ ▀██▀", "▀▀▀▀ ▀▀▀▀  ▀▀ "],
