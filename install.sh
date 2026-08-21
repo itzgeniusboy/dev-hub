@@ -162,8 +162,6 @@ else
       target="$target-musl"
     fi
 
-    filename="$APP-$target$archive_ext"
-
     if ! command -v curl >/dev/null 2>&1; then
         echo -e "${RED}Error: 'curl' is required but not installed.${NC}"
         exit 1
@@ -174,16 +172,13 @@ else
     fi
 
     if [ -z "$requested_version" ]; then
-        url="https://github.com/$REPO/releases/latest/download/$filename"
         specific_version=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p')
-
         if [[ -z "$specific_version" ]]; then
             echo -e "${RED}Failed to fetch the latest NEXUS version${NC}"
             exit 1
         fi
     else
         requested_version="${requested_version#v}"
-        url="https://github.com/$REPO/releases/download/v${requested_version}/$filename"
         specific_version=$requested_version
 
         http_status=$(curl -sI -o /dev/null -w "%{http_code}" "https://github.com/$REPO/releases/tag/v${requested_version}")
@@ -193,6 +188,9 @@ else
             exit 1
         fi
     fi
+
+    filename="$APP-$target-${specific_version}$archive_ext"
+    url="https://github.com/$REPO/releases/download/v${specific_version}/$filename"
 fi
 
 print_message() {
@@ -443,9 +441,6 @@ install_command_alias() {
         mkdir -p "$alias_dir"
         rm -f "$alias_dir/nexus" "$alias_dir/nx" "$alias_dir/devhub" "$alias_dir/opencode"
         ln -s "$INSTALL_DIR/nexus" "$alias_dir/nexus"
-        ln -s "$INSTALL_DIR/nexus" "$alias_dir/nx"
-        ln -s "$INSTALL_DIR/nexus" "$alias_dir/devhub"
-        ln -s "$INSTALL_DIR/nexus" "$alias_dir/opencode"
         ln -s "$INSTALL_DIR/nexus" "$alias_dir/nx"
         ln -s "$INSTALL_DIR/nexus" "$alias_dir/devhub"
         ln -s "$INSTALL_DIR/nexus" "$alias_dir/opencode"
