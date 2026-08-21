@@ -215,7 +215,7 @@ check_version() {
         if [[ "$installed_version" == "$specific_version" ]]; then
             # On Termux, ensure the wrapper has the LD_PRELOAD fix before skipping
             if [ "$is_termux" = "true" ] && [ -f "$INSTALL_DIR/dev-hub" ]; then
-                if ! grep -q "unset LD_PRELOAD" "$INSTALL_DIR/dev-hub"; then
+                if ! grep -q "ld-linux" "$INSTALL_DIR/dev-hub"; then
                     print_message info "${MUTED}Version ${NC}$specific_version${MUTED} installed, but launcher needs update. Refreshing...${NC}"
                     return 0
                 fi
@@ -286,13 +286,21 @@ if ! command -v grun >/dev/null 2>&1; then
     printf '%s\n' 'Dev Hub needs Termux glibc-runner. Install it with: pkg install glibc-repo glibc-runner' >&2
     exit 1
 fi
-# Termux injects libtermux-exec.so through LD_PRELOAD; glibc-runner requires it unset.
 unset LD_PRELOAD
 if [[ -n "${PREFIX:-}" && -d "$PREFIX/glibc/bin" ]]; then
     PATH="$PREFIX/glibc/bin:$PATH"
     export PATH
 fi
-exec grun "$SCRIPT_DIR/dev-hub.bin" "$@"
+# Direct loader invocation bypasses grun's strict flag parsing which fails on some versions
+ARCH="$(uname -m)"
+if [[ "$ARCH" == "aarch64" ]] && [[ -f "$PREFIX/glibc/lib/ld-linux-aarch64.so.1" ]]; then
+    exec "$PREFIX/glibc/lib/ld-linux-aarch64.so.1" --library-path "$PREFIX/glibc/lib" "$SCRIPT_DIR/dev-hub.bin" "$@"
+elif [[ "$ARCH" == "x86_64" ]] && [[ -f "$PREFIX/glibc/lib/ld-linux-x86-64.so.2" ]]; then
+    exec "$PREFIX/glibc/lib/ld-linux-x86-64.so.2" --library-path "$PREFIX/glibc/lib" "$SCRIPT_DIR/dev-hub.bin" "$@"
+else
+    # Fallback to grun if the direct loader isn't found
+    exec grun "$SCRIPT_DIR/dev-hub.bin" "$@"
+fi
 EOF
         chmod 755 "$INSTALL_DIR/dev-hub.bin" "$INSTALL_DIR/dev-hub"
     else
