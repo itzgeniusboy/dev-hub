@@ -104,6 +104,12 @@ export class Info extends Schema.Class<Info>("Config.Info")({
   }),
   experimental: ConfigExperimental.Experimental.pipe(Schema.optional),
   providers: Schema.Record(Schema.String, ConfigProvider.Info).pipe(Schema.optional),
+  api_keys: Schema.Struct({
+    groq: Schema.Array(Schema.String).pipe(Schema.optional),
+    openrouter: Schema.Array(Schema.String).pipe(Schema.optional),
+    gemini: Schema.Array(Schema.String).pipe(Schema.optional),
+  }).pipe(Schema.optional),
+  rotation: Schema.Boolean.pipe(Schema.optional),
 }) {}
 
 export class Document extends Schema.Class<Document>("Config.Document")({

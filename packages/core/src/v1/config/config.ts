@@ -110,6 +110,12 @@ export const Info = Schema.Struct({
   provider: Schema.optional(Schema.Record(Schema.String, ConfigProviderV1.Info)).annotate({
     description: "Custom provider configurations and model overrides",
   }),
+  api_keys: Schema.optional(Schema.Record(Schema.String, Schema.Array(Schema.String))).annotate({
+    description: "Optional rotating API keys by provider",
+  }),
+  rotation: Schema.optional(Schema.Boolean).annotate({
+    description: "Rotate configured provider keys and fall back across providers",
+  }),
   mcp: Schema.optional(
     Schema.Record(Schema.String, Schema.Union([ConfigMCPV1.Info, Schema.Struct({ enabled: Schema.Boolean })])),
   ).annotate({ description: "MCP (Model Context Protocol) server configurations" }),

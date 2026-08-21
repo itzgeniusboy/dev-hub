@@ -792,9 +792,7 @@ function defaultModelFromConfig(
   // First-session ACP startup must not scan historical sessions just to infer
   // a default. Configured model, nexus provider, then sorted best model keep
   // the protocol response deterministic without extra session/message reads.
-  const nexusProvider = providers[ProviderV2.ID.make("nexus")]
-  const nexusModel = nexusProvider ? Provider.sort(Object.values(nexusProvider.models))[0] : undefined
-  if (nexusProvider && nexusModel) return { providerID: nexusProvider.id, modelID: nexusModel.id }
+  // Removed opencode/nexus provider preference to enforce Groq/OpenRouter/Ollama fallback
 
   const best = Provider.sort(Object.values(providers).flatMap((provider) => Object.values(provider.models)))[0]
   if (best) return { providerID: best.providerID, modelID: best.id }

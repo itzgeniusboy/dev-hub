@@ -25,10 +25,12 @@ import { Auth } from "@/auth"
 import { EffectBridge } from "@/effect/bridge"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import * as Option from "effect/Option"
+import * as Cause from "effect/Cause"
 import * as OtelTracer from "@effect/opentelemetry/Tracer"
 import { LLMAISDK } from "./llm/ai-sdk"
 import { LLMNativeRuntime } from "./llm/native-runtime"
 import { LLMRequestPrep } from "./llm/request"
+import { RotationEngine } from "@/provider/rotation"
 
 export const OUTPUT_TOKEN_MAX = ProviderTransform.OUTPUT_TOKEN_MAX
 
@@ -363,19 +365,55 @@ const live: Layer.Layer<
               (ctrl) => Effect.sync(() => ctrl.abort()),
             )
 
-            const result = yield* run({ ...input, abort: ctrl.signal })
+            const alternatives = yield* provider.fallbackModels(input.model.providerID)
+            const candidates = [
+              { providerID: input.model.providerID, modelID: input.model.id },
+              ...alternatives,
+            ] as const
 
-            if (result.type === "native") return result.stream
+            const toStream = (model: Provider.Model) =>
+              Effect.gen(function* () {
+                const result = yield* run({ ...input, model, abort: ctrl.signal })
+                if (result.type === "native") return result.stream
 
-            // Adapter seam: both runtimes expose the same LLMEvent stream. Native
-            // already returns one; AI SDK streams are converted here.
-            const state = LLMAISDK.adapterState()
-            return Stream.fromAsyncIterable(result.result.fullStream, (e) =>
-              e instanceof Error ? e : new Error(String(e)),
-            ).pipe(
-              Stream.mapEffect((event) => LLMAISDK.toLLMEvents(state, event)),
-              Stream.flatMap((events) => Stream.fromIterable(events)),
-            )
+                // Adapter seam: both runtimes expose the same LLMEvent stream. Native
+                // already returns one; AI SDK streams are converted here.
+                const state = LLMAISDK.adapterState()
+                return Stream.fromAsyncIterable(result.result.fullStream, (e) =>
+                  e instanceof Error ? e : new Error(String(e)),
+                ).pipe(
+                  Stream.mapEffect((event) => LLMAISDK.toLLMEvents(state, event)),
+                  Stream.flatMap((events) => Stream.fromIterable(events)),
+                )
+              })
+
+            const attempt = (remaining: ReadonlyArray<{ providerID: ProviderV2.ID; modelID: ModelV2.ID }>): Effect.Effect<Stream.Stream<LLMEvent, unknown>> =>
+              Effect.gen(function* () {
+                const [candidate, ...rest] = remaining
+                if (!candidate) return yield* Effect.dieMessage("No fallback model is available")
+                const model = yield* provider.getModel(candidate.providerID, candidate.modelID)
+                const current = yield* toStream(model)
+                return current.pipe(
+                  Stream.catchCause((cause) => {
+                    const message = Cause.pretty(cause)
+                    if (!RotationEngine.isRateLimited(message) || rest.length === 0) return Stream.failCause(cause)
+                    const next = rest[0]
+                    return Stream.unwrap(
+                      Effect.gen(function* () {
+                        yield* Effect.logWarning("provider rate limit; switching model", {
+                          fromProviderID: candidate.providerID,
+                          fromModelID: candidate.modelID,
+                          toProviderID: next.providerID,
+                          toModelID: next.modelID,
+                        })
+                        return yield* attempt(rest)
+                      }),
+                    )
+                  }),
+                )
+              })
+
+            return yield* attempt(candidates)
           }),
         ),
       )

@@ -31,6 +31,13 @@ import { ModelV2 } from "@nexus-ai/core/model"
 import { ModelStatus } from "./model-status"
 import { RuntimeFlags } from "@/effect/runtime-flags"
 import { ProviderError } from "./error"
+import {
+  RotationEngine,
+  providerPriority,
+  isDeprecatedFreeProvider,
+  configuredProviderKeys,
+  modelForProvider,
+} from "./rotation"
 
 const OPENAI_HEADER_TIMEOUT_DEFAULT = 300_000
 
@@ -1178,6 +1185,9 @@ export interface Interface {
   ) => Effect.Effect<{ providerID: ProviderV2.ID; modelID: string } | undefined>
   readonly getSmallModel: (providerID: ProviderV2.ID) => Effect.Effect<Model | undefined>
   readonly defaultModel: () => Effect.Effect<{ providerID: ProviderV2.ID; modelID: ModelV2.ID }, DefaultModelError>
+  readonly fallbackModels: (
+    excludeProviderID: ProviderV2.ID,
+  ) => Effect.Effect<ReadonlyArray<{ providerID: ProviderV2.ID; modelID: ModelV2.ID }>>
 }
 
 interface State {
@@ -1187,6 +1197,7 @@ interface State {
   sdk: Map<string, BundledSDK>
   modelLoaders: Record<string, CustomModelLoader>
   varsLoaders: Record<string, CustomVarsLoader>
+  rotation: RotationEngine
 }
 
 export class Service extends Context.Service<Service, Interface>()("@nexus/Provider") {}
@@ -1376,6 +1387,7 @@ const layer = Layer.effect(
       Effect.gen(function* () {
         const bridge = yield* EffectBridge.make()
         const cfg = yield* config.get()
+        const rotation = new RotationEngine(cfg.api_keys ?? {}, cfg.rotation !== false)
         const modelsDev = yield* modelsDevSvc.get()
         const catalog = mapValues(modelsDev, fromModelsDevProvider)
         const database = mapValues(catalog, toPublicInfo)
@@ -1700,6 +1712,7 @@ const layer = Layer.effect(
           sdk,
           modelLoaders,
           varsLoaders,
+          rotation,
         }
       }),
     )
@@ -1753,6 +1766,8 @@ const layer = Layer.effect(
         })
 
         if (baseURL !== undefined) options["baseURL"] = baseURL
+        const rotatedKey = s.rotation.next(model.providerID)
+        if (options["apiKey"] === undefined && rotatedKey) options["apiKey"] = rotatedKey
         if (options["apiKey"] === undefined && provider.key) options["apiKey"] = provider.key
         if (model.headers)
           options["headers"] = {
@@ -2000,12 +2015,25 @@ const layer = Layer.effect(
       for (const entry of recent) {
         const provider = s.providers[entry.providerID]
         if (!provider) continue
+        if (isDeprecatedFreeProvider(provider.id)) continue
         if (!provider.models[entry.modelID]) continue
         return { providerID: entry.providerID, modelID: entry.modelID }
       }
 
       const configured = Object.keys(cfg.provider ?? {})
-      const provider = Object.values(s.providers).find((p) => configured.length === 0 || configured.includes(p.id))
+      const candidates = Object.values(s.providers)
+        .filter((p) => configured.length === 0 || configured.includes(p.id))
+        .filter((p) => !isDeprecatedFreeProvider(p.id))
+        .filter(
+          (p) =>
+            p.id === "ollama" ||
+            Boolean(p.key) ||
+            p.source === "env" ||
+            p.source === "api" ||
+            configuredProviderKeys(cfg.api_keys, p.id).length > 0,
+        )
+        .sort((a, b) => providerPriority(a.id) - providerPriority(b.id) || a.id.localeCompare(b.id))
+      const provider = candidates[0]
       if (!provider) return yield* new NoProvidersError()
       const [model] = sort(Object.values(provider.models))
       if (!model) return yield* new NoModelsError({ providerID: provider.id })
@@ -2015,11 +2043,34 @@ const layer = Layer.effect(
       }
     })
 
-    return Service.of({ list, getProvider, getModel, getLanguage, closest, getSmallModel, defaultModel })
+    const fallbackModels = Effect.fn("Provider.fallbackModels")(function* (excludeProviderID: ProviderV2.ID) {
+      const cfg = yield* config.get()
+      const s = yield* InstanceState.get(state)
+      const configured = Object.keys(cfg.provider ?? {})
+      return Object.values(s.providers)
+        .filter((p) => p.id !== excludeProviderID)
+        .filter((p) => !isDeprecatedFreeProvider(p.id))
+        .filter((p) => configured.length === 0 || configured.includes(p.id))
+        .filter(
+          (p) =>
+            p.id === "ollama" ||
+            Boolean(p.key) ||
+            p.source === "env" ||
+            p.source === "api" ||
+            configuredProviderKeys(cfg.api_keys, p.id).length > 0,
+        )
+        .sort((a, b) => providerPriority(a.id) - providerPriority(b.id) || a.id.localeCompare(b.id))
+        .flatMap((p) => {
+          const modelID = modelForProvider(p.id, p.models)
+          return modelID ? [{ providerID: p.id, modelID: ModelV2.ID.make(modelID) }] : []
+        })
+    })
+
+    return Service.of({ list, getProvider, getModel, getLanguage, closest, getSmallModel, defaultModel, fallbackModels })
   }),
 )
 
-const priority = ["gpt-5", "claude-sonnet-4", "big-pickle", "gemini-3-pro"]
+const priority = ["gpt-5", "claude-sonnet-4", "llama3", "llama-3", "mixtral", "gemini-3-pro"]
 const smallModelFamilyPriority = ["gemini-flash", "gpt-nano", "claude-haiku"]
 export function sort<T extends { id: string }>(models: T[]) {
   return sortBy(
