@@ -18,13 +18,13 @@ Usage: install.sh [options]
 
 Options:
     -h, --help              Display this help message
-    -v, --version <version> Install a specific version (e.g., 0.1.4)
+    -v, --version <version> Install a specific version (e.g., 0.1.5)
     -b, --binary <path>     Install from a local binary instead of downloading
         --no-modify-path    Don't modify shell config files (.zshrc, .bashrc, etc.)
 
 Examples:
     curl -fsSL https://raw.githubusercontent.com/itzgeniusboy/dev-hub/main/install.sh | bash
-    curl -fsSL https://raw.githubusercontent.com/itzgeniusboy/dev-hub/main/install.sh | bash -s -- --version 0.1.4
+    curl -fsSL https://raw.githubusercontent.com/itzgeniusboy/dev-hub/main/install.sh | bash -s -- --version 0.1.5
     ./install.sh --binary /path/to/dev-hub
 EOF
 }
