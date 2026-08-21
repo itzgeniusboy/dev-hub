@@ -62,10 +62,13 @@ async function setupResponseOK(provider: string, response: Response, url: string
 }
 
 async function validateKey(provider: KeyProvider, key: string): Promise<boolean> {
+  const normalizedKey = typeof key === "string" ? key.trim() : ""
+  if (!normalizedKey) return false
+
   const controller = new AbortController()
   const timeout = setTimeout(() => controller.abort(), 12_000)
   try {
-    const headers = { Authorization: `Bearer ${key}`, "Content-Type": "application/json" }
+    const headers = { Authorization: `Bearer ${normalizedKey}`, "Content-Type": "application/json" }
     if (provider === "groq" || provider === "openrouter") {
       const baseURL = provider === "groq" ? "https://api.groq.com/openai/v1" : "https://openrouter.ai/api/v1"
       const catalogURL = `${baseURL}/models`
@@ -86,7 +89,7 @@ async function validateKey(provider: KeyProvider, key: string): Promise<boolean>
       return setupResponseOK(provider, testResponse, testURL)
     }
 
-    const catalogURL = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(key)}`
+    const catalogURL = `https://generativelanguage.googleapis.com/v1beta/models?key=${encodeURIComponent(normalizedKey)}`
     const catalogResponse = await fetch(catalogURL, { signal: controller.signal })
     if (!(await setupResponseOK(provider, catalogResponse, catalogURL))) return false
     const catalog = (await catalogResponse.json().catch(() => ({ models: [] }))) as {
@@ -101,7 +104,7 @@ async function validateKey(provider: KeyProvider, key: string): Promise<boolean>
       preferred.find((id) => ids.includes(id)) ??
       ids.find((id) => /gemini-(?:2\.5|2\.0|1\.5)-flash(?:$|-)/i.test(id))
     if (!model) return false
-    const testURL = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(key)}`
+    const testURL = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(normalizedKey)}`
     const testResponse = await fetch(testURL, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -228,8 +231,11 @@ export const SetupFreeCommand = effectCmd({
 
       const answer = yield* Prompt.password({ message: `${labels[provider]}:`, mask: "*" })
       if (Option.isNone(answer)) continue
-      const key = answer.value.trim()
-      if (!key) continue
+      const key = typeof answer.value === "string" ? answer.value.trim() : ""
+      if (!key) {
+        yield* Prompt.log.warn(`${provider} key skipped: no key entered.`)
+        continue
+      }
 
       const ok = yield* Effect.tryPromise({
         try: () => validateKey(provider, key),
