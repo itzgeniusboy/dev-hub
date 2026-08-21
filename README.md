@@ -1,13 +1,14 @@
-<p align="center">
-  <a href="https://github.com/itzgeniusboy/dev-hub">
-    <picture>
-      <source srcset="packages/console/app/src/asset/logo-ornate-dark.svg" media="(prefers-color-scheme: dark)">
-      <source srcset="packages/console/app/src/asset/logo-ornate-light.svg" media="(prefers-color-scheme: light)">
-      <img src="packages/console/app/src/asset/logo-ornate-light.svg" alt="Dev Hub logo">
-    </picture>
-  </a>
-</p>
-<p align="center">The open source AI coding agent.</p>
+<div align="center">
+<pre>
+       ◇      ◇      ◇
+       │      │      │
+   ╭──────┬──────┬──────╮
+   │ PLAN │ BUILD│ CHECK│
+   ╰──────┴──────┴──────╯
+        ◉  POWER CORE
+     DEV HUB AGNET ...The Ultimate Powerhouse for Android Automation!
+</pre>
+</div>
 <p align="center">
   <a href="https://github.com/itzgeniusboy/dev-hub/discord"><img alt="Discord" src="https://img.shields.io/discord/1391832426048651334?style=flat-square&label=discord" /></a>
   <a href="https://www.npmjs.com/package/dev-hub-ai"><img alt="npm" src="https://img.shields.io/npm/v/dev-hub-ai?style=flat-square" /></a>
