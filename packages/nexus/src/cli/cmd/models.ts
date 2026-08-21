@@ -114,7 +114,14 @@ export const ModelsTestCommand = effectCmd({
         if (/rate.?limit|quota exceeded/i.test(errStr)) {
           yield* spinner.stop(UI.Style.TEXT_WARNING_BOLD + "! " + UI.Style.TEXT_NORMAL + label + " (Rate limited)")
         } else {
-          yield* spinner.stop(UI.Style.TEXT_DANGER_BOLD + "✗ " + UI.Style.TEXT_NORMAL + label + " (Failed)")
+          yield* spinner.stop(
+            UI.Style.TEXT_DANGER_BOLD +
+              "✗ " +
+              UI.Style.TEXT_NORMAL +
+              label +
+              " (Failed)" +
+              (process.env.NEXUS_DEBUG_API === "1" ? ` ${errStr}` : ""),
+          )
         }
         continue
       }
@@ -134,7 +141,14 @@ export const ModelsTestCommand = effectCmd({
         if (/rate.?limit|quota exceeded/i.test(errStr)) {
           yield* spinner.stop(UI.Style.TEXT_WARNING_BOLD + "! " + UI.Style.TEXT_NORMAL + label + " (Rate limited)")
         } else {
-          yield* spinner.stop(UI.Style.TEXT_DANGER_BOLD + "✗ " + UI.Style.TEXT_NORMAL + label + " (Failed)")
+          yield* spinner.stop(
+            UI.Style.TEXT_DANGER_BOLD +
+              "✗ " +
+              UI.Style.TEXT_NORMAL +
+              label +
+              " (Failed)" +
+              (process.env.NEXUS_DEBUG_API === "1" ? ` ${errStr}` : ""),
+          )
         }
       }
     }
