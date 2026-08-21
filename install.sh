@@ -213,6 +213,13 @@ check_version() {
         installed_version=$("$APP" --version 2>/dev/null || echo "")
 
         if [[ "$installed_version" == "$specific_version" ]]; then
+            # On Termux, ensure the wrapper has the LD_PRELOAD fix before skipping
+            if [ "$is_termux" = "true" ] && [ -f "$INSTALL_DIR/dev-hub" ]; then
+                if ! grep -q "unset LD_PRELOAD" "$INSTALL_DIR/dev-hub"; then
+                    print_message info "${MUTED}Version ${NC}$specific_version${MUTED} installed, but launcher needs update. Refreshing...${NC}"
+                    return 0
+                fi
+            fi
             print_message info "${MUTED}Version ${NC}$specific_version${MUTED} already installed${NC}"
             exit 0
         fi
