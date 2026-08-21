@@ -129,15 +129,26 @@ function installPackage(name) {
   if (!version) return
 
   const temp = fs.mkdtempSync(path.join(os.tmpdir(), "dev-hub-install-"))
+  const extracted = path.join(temp, "extracted")
   try {
+    fs.mkdirSync(extracted)
+    // npm install can reject a Linux package when Node reports Android. npm pack
+    // fetches the tarball without applying the package's platform filter.
     const result = childProcess.spawnSync(
       "npm",
-      ["install", "--ignore-scripts", "--include=optional", "--no-save", "--loglevel=error", "--prefix", temp, `${name}@${version}`],
-      { stdio: "inherit", windowsHide: true },
+      ["pack", "--ignore-scripts", "--silent", "--pack-destination", temp, `${name}@${version}`],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"], windowsHide: true },
     )
     if (result.status !== 0) return
-    const packageDir = path.join(temp, "node_modules", name)
-    copyBinary(path.join(packageDir, "bin", sourceBinary), targetBinary)
+    const archive = fs.readdirSync(temp).find((entry) => entry.endsWith(".tgz"))
+    if (!archive) return
+
+    const unpack = childProcess.spawnSync("tar", ["-xzf", path.join(temp, archive), "-C", extracted], {
+      stdio: "inherit",
+      windowsHide: true,
+    })
+    if (unpack.status !== 0) return
+    copyBinary(path.join(extracted, "package", "bin", sourceBinary), targetBinary)
     return true
   } finally {
     fs.rmSync(temp, { recursive: true, force: true })
