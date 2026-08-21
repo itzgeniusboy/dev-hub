@@ -1,69 +1,34 @@
-import { RGBA, TextAttributes } from "@opentui/core"
-import { For, type JSX } from "solid-js"
-import { tint, useTheme } from "../context/theme"
-import { logo, logoSeparator } from "../logo"
+import { TextAttributes } from "@opentui/core"
+import { useTheme } from "../context/theme"
+import { wordmark } from "../logo"
+
+const [wordmarkLeft, wordmarkRight] = wordmark.split(" ")
 
 export function Logo() {
   const { theme } = useTheme()
 
-  const renderLine = (line: string, fg: RGBA, bold: boolean): JSX.Element[] => {
-    const shadow = tint(theme.background, fg, 0.25)
-    const attrs = bold ? TextAttributes.BOLD : undefined
-    return Array.from(line).map((char) => {
-      if (char === "_") {
-        return (
-          <text fg={fg} bg={shadow} attributes={attrs} selectable={false}>
-            {" "}
-          </text>
-        )
-      }
-      if (char === "^") {
-        return (
-          <text fg={fg} bg={shadow} attributes={attrs} selectable={false}>
-            ▀
-          </text>
-        )
-      }
-      if (char === "~") {
-        return (
-          <text fg={shadow} attributes={attrs} selectable={false}>
-            ▀
-          </text>
-        )
-      }
-      if (char === ",") {
-        return (
-          <text fg={shadow} attributes={attrs} selectable={false}>
-            ▄
-          </text>
-        )
-      }
-      return (
-        <text fg={fg} attributes={attrs} selectable={false}>
-          {char}
-        </text>
-      )
-    })
-  }
-
   return (
-    <box>
-      <For each={logo.left}>
-        {(line, index) => (
-          <box flexDirection="row">
-            <box flexDirection="row">{renderLine(line, theme.textMuted, false)}</box>
-            <text
-              fg={logoSeparator[index()] === "-" ? theme.text : theme.background}
-              bg={theme.background}
-              attributes={logoSeparator[index()] === "-" ? TextAttributes.BOLD : undefined}
-              selectable={false}
-            >
-              {logoSeparator[index()]}
-            </text>
-            <box flexDirection="row">{renderLine(logo.right[index()], theme.text, true)}</box>
-          </box>
-        )}
-      </For>
+    <box flexDirection="column">
+      <text fg={theme.background} selectable={false}>
+        {" "}
+      </text>
+      <box flexDirection="row">
+        <text fg={theme.textMuted} selectable={false}>
+          {wordmarkLeft}
+        </text>
+        <text fg={theme.background} selectable={false}>
+          {" "}
+        </text>
+        <text fg={theme.text} attributes={TextAttributes.BOLD} selectable={false}>
+          {wordmarkRight}
+        </text>
+      </box>
+      <text fg={theme.background} selectable={false}>
+        {" "}
+      </text>
+      <text fg={theme.background} selectable={false}>
+        {" "}
+      </text>
     </box>
   )
 }
