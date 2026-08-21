@@ -2,7 +2,7 @@ import fs from "fs"
 import os from "os"
 import path from "path"
 
-export const API_PROVIDERS = ["groq", "openrouter", "deepseek", "gemini", "google", "cerebras", "openai"] as const
+export const API_PROVIDERS = ["groq", "openrouter", "deepseek", "gemini", "google", "cerebras", "openai", "opencode"] as const
 export type ApiProvider = (typeof API_PROVIDERS)[number]
 export type ApiKeyStatus = "active" | "rate_limited" | "invalid" | "suspended" | "unknown"
 
