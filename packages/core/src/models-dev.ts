@@ -201,6 +201,7 @@ const layer = Layer.effect(
 
     const fetchAndWrite = Effect.fn("ModelsDev.fetchAndWrite")(function* () {
       const text = yield* fetchApi()
+      const data = JSON.parse(text) // Validate JSON before writing
       const tempfile = `${filepath}.${process.pid}.${Date.now()}.tmp`
       yield* fs.writeWithDirs(tempfile, text).pipe(
         Effect.andThen(fs.rename(tempfile, filepath)),
@@ -211,7 +212,7 @@ const layer = Layer.effect(
           }),
         ),
       )
-      return text
+      return data as Record<string, Provider>
     })
 
     const populate = Effect.gen(function* () {
@@ -221,14 +222,17 @@ const layer = Layer.effect(
       if (snapshot) return snapshot
       if (Flag.NEXUS_DISABLE_MODELS_FETCH) return {}
       // Flock is cross-process: concurrent nexus CLIs can race on this cache file.
-      const text = yield* Effect.scoped(
+      const data = yield* Effect.scoped(
         Effect.gen(function* () {
           yield* Flock.effect(lockKey)
           return yield* fetchAndWrite()
         }),
       )
-      return JSON.parse(text) as Record<string, Provider>
-    }).pipe(Effect.withSpan("ModelsDev.populate"), Effect.orDie)
+      return data
+    }).pipe(
+      Effect.withSpan("ModelsDev.populate"),
+      Effect.catchAll((e) => Effect.succeed({} as Record<string, Provider>))
+    )
 
     const [cachedGet, invalidate] = yield* Effect.cachedInvalidateWithTTL(populate, Duration.infinity)
 

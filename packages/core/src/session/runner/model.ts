@@ -5,6 +5,9 @@ import { type Model } from "@nexus-ai/llm"
 import * as AnthropicMessages from "@nexus-ai/llm/protocols/anthropic-messages"
 import * as OpenAICompatibleChat from "@nexus-ai/llm/protocols/openai-compatible-chat"
 import * as OpenAIResponses from "@nexus-ai/llm/protocols/openai-responses"
+import * as OpenAIChat from "@nexus-ai/llm/protocols/openai-chat"
+import * as Gemini from "@nexus-ai/llm/protocols/gemini"
+import * as BedrockConverse from "@nexus-ai/llm/protocols/bedrock-converse"
 import { Auth, type AnyRoute } from "@nexus-ai/llm/route"
 import { Context, Effect, Layer, Schema } from "effect"
 import { produce } from "immer"
@@ -140,8 +143,10 @@ export const fromCatalogModel = (
         })
   const key = apiKey(resolved, credential)
   if (resolved.api.type === "aisdk" && resolved.api.package === "@ai-sdk/openai") {
+    const chatOnly = /^(gpt-3|gpt-4-\d|gpt-4$|o1-mini)/.test(resolved.api.id)
+    const route = chatOnly ? OpenAIChat.route : OpenAIResponses.route
     return Effect.succeed(
-      withDefaults(resolved, OpenAIResponses.route)
+      withDefaults(resolved, route)
         .with({ auth: key === undefined ? Auth.none : Auth.bearer(key) })
         .model({ id: resolved.api.id }),
     )
@@ -153,7 +158,21 @@ export const fromCatalogModel = (
         .model({ id: resolved.api.id }),
     )
   }
-  if (resolved.api.type === "aisdk" && resolved.api.package === "@ai-sdk/openai-compatible" && resolved.api.url) {
+  if (resolved.api.type === "aisdk" && resolved.api.package === "@ai-sdk/google") {
+    return Effect.succeed(
+      withDefaults(resolved, Gemini.route)
+        .with({ auth: key === undefined ? Auth.none : Auth.header("x-goog-api-key", key) })
+        .model({ id: resolved.api.id }),
+    )
+  }
+  if (resolved.api.type === "aisdk" && resolved.api.package === "@ai-sdk/amazon-bedrock") {
+    return Effect.succeed(
+      withDefaults(resolved, BedrockConverse.route)
+        .with({ auth: Auth.none }) // Auth handled by AWS SDK internally in runner if needed, or via bearer if proxy
+        .model({ id: resolved.api.id }),
+    )
+  }
+  if (resolved.api.type === "aisdk" && (resolved.api.package === "@ai-sdk/openai-compatible" || resolved.api.package === "@openrouter/ai-sdk-provider" || resolved.api.package === "@xai/ai-sdk-provider" || resolved.api.package === "xai-ai-sdk-provider" || resolved.api.package === "groq-ai-sdk-provider" || resolved.api.package === "@groq/ai-sdk-provider" || resolved.api.package === "mistral-ai-sdk-provider" || resolved.api.package === "@mistral/ai-sdk-provider")) {
     return Effect.succeed(
       withDefaults(resolved, OpenAICompatibleChat.route)
         .with({ auth: key === undefined ? Auth.none : Auth.bearer(key) })

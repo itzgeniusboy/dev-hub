@@ -88,7 +88,7 @@ const requestId = (headers: Record<string, string>) => {
   )
 }
 
-const retryableStatus = (status: number) => status === 429 || status === 503 || status === 504 || status === 529
+const retryableStatus = (status: number) => status === 408 || status === 429 || status === 500 || status === 502 || status === 503 || status === 504 || status === 529
 
 const retryAfterMs = (headers: Record<string, string>) => {
   const millis = Number(headers["retry-after-ms"])

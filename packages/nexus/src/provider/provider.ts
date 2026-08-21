@@ -256,7 +256,9 @@ function custom(dep: CustomDep): Record<string, CustomLoader> {
       Effect.succeed({
         autoload: false,
         async getModel(sdk: any, modelID: string, _options?: Record<string, any>) {
-          return sdk.responses(modelID)
+          const chatOnly = /^(gpt-3|gpt-4-\d|gpt-4$|o1-mini)/.test(modelID)
+          if (chatOnly && sdk.chat) return sdk.chat(modelID)
+          return sdk.responses ? sdk.responses(modelID) : sdk.chat?.(modelID) ?? sdk.languageModel(modelID)
         },
         options: { headerTimeout: OPENAI_HEADER_TIMEOUT_DEFAULT },
       }),
@@ -271,7 +273,9 @@ function custom(dep: CustomDep): Record<string, CustomLoader> {
       Effect.succeed({
         autoload: false,
         async getModel(sdk: any, modelID: string, _options?: Record<string, any>) {
-          return sdk.responses(modelID)
+          if (sdk.responses === undefined && sdk.chat === undefined) return sdk.languageModel(modelID)
+          if (/^grok-4/.test(modelID) && sdk.responses) return sdk.responses(modelID)
+          return sdk.chat ? sdk.chat(modelID) : sdk.languageModel(modelID)
         },
         options: {},
       }),
@@ -586,12 +590,20 @@ function custom(dep: CustomDep): Record<string, CustomLoader> {
             const { GoogleAuth } = await import("google-auth-library")
             const auth = new GoogleAuth({ scopes: ["https://www.googleapis.com/auth/cloud-platform"] })
             const client = await auth.getClient()
-            const token = await client.getAccessToken()
+            let token = await client.getAccessToken()
+            if (!token?.token) throw new Error("google-vertex: failed to obtain access token")
 
             const headers = new Headers(init?.headers)
             headers.set("Authorization", `Bearer ${token.token}`)
 
-            return fetch(input, { ...init, headers })
+            let response = await fetch(input, { ...init, headers })
+            if (response.status === 401 && client.refreshAccessToken) {
+              token = await client.refreshAccessToken()
+              if (!token?.token) throw new Error("google-vertex: failed to refresh access token")
+              headers.set("Authorization", `Bearer ${token.token}`)
+              response = await fetch(input, { ...init, headers })
+            }
+            return response
           },
         },
         async getModel(sdk: any, modelID: string) {
@@ -1616,7 +1628,7 @@ const layer = Layer.effect(
           if (!apiKey) continue
           mergeProvider(providerID, {
             source: "env",
-            key: provider.env.length === 1 ? apiKey : undefined,
+            key: apiKey, // Keep the resolved key regardless of how many env vars were checked
           })
         }
 
@@ -1899,7 +1911,10 @@ const layer = Layer.effect(
         const importSpec = installedPath.startsWith("file://") ? installedPath : pathToFileURL(installedPath).href
         const mod = await import(importSpec)
 
-        const fn = mod[Object.keys(mod).find((key) => key.startsWith("create"))!]
+        const candidates = ["createOpenAICompatible", "languageModel", "create"]
+        const keyExport = Object.keys(mod).find(k => candidates.includes(k)) ?? Object.keys(mod).find(k => k.startsWith("create"))
+        if (!keyExport || typeof mod[keyExport] !== "function") throw new Error(`Package ${model.api.npm} exports no usable factory`)
+        const fn = mod[keyExport]
         const loaded = fn({
           name: model.providerID,
           ...options,

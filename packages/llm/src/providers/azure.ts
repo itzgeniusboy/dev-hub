@@ -29,18 +29,14 @@ const responsesRoute = OpenAIResponses.route.with({
   id: "azure-openai-responses",
   provider: id,
   auth: routeAuth,
-  endpoint: {
-    query: { "api-version": "v1" },
-  },
+  endpoint: {}, // Remove hardcoded query so user-provided queryParams or default config applies cleanly
 })
 
 const chatRoute = OpenAIChat.route.with({
   id: "azure-openai-chat",
   provider: id,
   auth: routeAuth,
-  endpoint: {
-    query: { "api-version": "v1" },
-  },
+  endpoint: {},
 })
 
 export const routes = [responsesRoute, chatRoute]
