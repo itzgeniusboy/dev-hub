@@ -421,6 +421,11 @@ const live: Layer.Layer<
                   if (!RotationEngine.isFallbackable(message)) return undefined
                   
                   return Effect.gen(function* () {
+                    const status = RotationEngine.isRateLimited(message) ? "rate_limited" : "invalid"
+                    const currentUsedKey = yield* provider.currentKey(candidate.providerID)
+                    if (currentUsedKey) {
+                      yield* Effect.promise(() => import("../api/ApiVault").then((m) => m.updateApiKeyStatus(candidate.providerID, currentUsedKey, status)))
+                    }
                     const sameProviderKeyCount = yield* provider.rotationKeyCount(candidate.providerID)
                     if (sameProviderKeyCount > retryCount + 1) {
                       yield* Effect.logWarning("provider failed; retrying same provider with next key", {

@@ -38,9 +38,12 @@ import {
   configuredProviderKeys,
   modelForProvider,
 } from "./rotation"
-import { apiVaultKeyEntries, getApiVaultStatus } from "../api/ApiVault"
+import { apiVaultKeyEntries, getApiVaultStatus, verifyAllVaultKeys } from "../api/ApiVault"
 
 function mergeApiVaultKeys(configured: unknown): Record<string, string[]> {
+  // Trigger non-blocking health check to mark invalid/rate-limited keys
+  verifyAllVaultKeys().catch(() => {})
+
   const result: Record<string, string[]> = {}
   if (configured && typeof configured === "object" && !Array.isArray(configured)) {
     for (const [provider, values] of Object.entries(configured as Record<string, unknown>)) {
@@ -52,6 +55,9 @@ function mergeApiVaultKeys(configured: unknown): Record<string, string[]> {
     }
   }
   for (const { provider, entry } of apiVaultKeyEntries()) {
+    if (entry.status === "invalid" || (entry.status === "suspended" && entry.suspendedUntil && Date.parse(entry.suspendedUntil) > Date.now())) {
+      continue
+    }
     const keys = result[provider] ?? []
     if (!keys.includes(entry.key)) result[provider] = [...keys, entry.key]
   }

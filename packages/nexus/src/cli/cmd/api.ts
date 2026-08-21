@@ -18,39 +18,7 @@ function printError(error: unknown): void {
   process.stderr.write(`Error: ${error instanceof Error ? error.message : String(error)}\n`)
 }
 
-function endpointFor(providerInput: string): string | undefined {
-  const provider = normalizeProvider(providerInput)
-  if (!provider) return undefined
-  if (provider === "groq") return "https://api.groq.com/openai/v1/models"
-  if (provider === "openrouter") return "https://openrouter.ai/api/v1/models"
-  if (provider === "deepseek") return "https://api.deepseek.com/models"
-  if (provider === "gemini") return "https://generativelanguage.googleapis.com/v1beta/models"
-  if (provider === "cerebras") return "https://api.cerebras.ai/v1/models"
-  if (provider === "openai") return "https://api.openai.com/v1/models"
-  return undefined
-}
-
-async function checkKey(providerInput: string, key: string): Promise<{ status: ApiKeyStatus; code?: number }> {
-  const provider = normalizeProvider(providerInput)
-  const endpoint = endpointFor(providerInput)
-  if (!provider || !endpoint) return { status: "unknown" }
-  const controller = new AbortController()
-  const timer = setTimeout(() => controller.abort(), 8000)
-  try {
-    const headers: Record<string, string> = { Authorization: `Bearer ${key}` }
-    const url = provider === "gemini" ? `${endpoint}?key=${encodeURIComponent(key)}` : endpoint
-    if (provider === "gemini") delete headers.Authorization
-    const response = await fetch(url, { headers, signal: controller.signal })
-    if (response.ok) return { status: "active", code: response.status }
-    if (response.status === 401 || response.status === 403) return { status: "invalid", code: response.status }
-    if (response.status === 429) return { status: "rate_limited", code: response.status }
-    return { status: "unknown", code: response.status }
-  } catch {
-    return { status: "unknown" }
-  } finally {
-    clearTimeout(timer)
-  }
-}
+import { checkKey } from "../../api/ApiVault"
 
 const AddCommand = cmd({
   command: "add <provider> <key> [label]",
@@ -101,11 +69,11 @@ const CheckCommand = cmd({
     }
     process.stdout.write("Checking API keys (secrets remain masked)...\n")
     for (const row of rows) {
-      const result = await checkKey(row.provider, (await import("../../api/ApiVault")).loadApiVault().providers[row.provider]?.[row.index - 1]?.key ?? "")
+      const vault = (await import("../../api/ApiVault")).loadApiVault()
+      const rawKey = vault.providers[row.provider]?.[row.index - 1]?.key ?? ""
+      const result = await checkKey(row.provider, rawKey)
       const suffix = result.code ? ` HTTP ${result.code}` : ""
       process.stdout.write(`${result.status === "active" ? "✓" : result.status === "rate_limited" ? "!" : "✗"} ${row.provider} #${row.index} ${row.label} ${row.key} — ${result.status}${suffix}\n`)
-      const vault = (await import("../../api/ApiVault")).loadApiVault()
-      const rawKey = vault.providers[row.provider]?.[row.index - 1]?.key
       if (rawKey) updateApiKeyStatus(row.provider, rawKey, result.status, result)
     }
   },
