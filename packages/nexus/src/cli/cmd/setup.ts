@@ -79,7 +79,9 @@ async function validateKey(provider: KeyProvider, key: string): Promise<boolean>
       const baseURL = provider === "groq" ? "https://api.groq.com/openai/v1" : "https://openrouter.ai/api/v1"
       const catalogURL = `${baseURL}/models`
       const catalogResponse = await fetch(catalogURL, { headers, signal: controller.signal })
-      if (!(await setupResponseOK(provider, catalogResponse, catalogURL))) return false
+      if (!(await setupResponseOK(provider, catalogResponse, catalogURL))) {
+        return false
+      }
       const catalog = (await catalogResponse.json().catch(() => ({ data: [] }))) as { data?: Array<{ id?: string }> }
       const ids = (catalog.data ?? []).map((item) => item.id).filter((id): id is string => Boolean(id))
       const preferred = PREFERRED_MODELS[provider]

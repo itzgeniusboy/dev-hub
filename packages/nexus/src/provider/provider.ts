@@ -2053,9 +2053,20 @@ const layer = Layer.effect(
 
     const defaultModel = Effect.fn("Provider.defaultModel")(function* () {
       const cfg = yield* config.get()
-      if (cfg.model) return parseModel(cfg.model)
-
       const s = yield* InstanceState.get(state)
+      if (cfg.model) {
+        const configured = parseModel(cfg.model)
+        const provider = s.providers[configured.providerID]
+        const stale = /llama-3\.3-70b-versatile|gemini-3-pro-image-preview|gemini-[^/]*(?:tts|image)/i.test(configured.modelID)
+        if (provider && stale) {
+          const preferred = modelForProvider(configured.providerID, provider.models)
+          if (preferred) return { providerID: configured.providerID, modelID: preferred }
+        }
+        if (provider && provider.models[configured.modelID] && !isDeprecatedFreeProvider(provider.id)) return configured
+        // If the configured model is stale or its provider doesn't exist, fall through to recent/defaults
+      }
+
+      
       const recent = yield* fs.readJson(path.join(Global.Path.state, "model.json")).pipe(
         Effect.map((x): { providerID: ProviderV2.ID; modelID: ModelV2.ID }[] => {
           if (!isRecord(x) || !Array.isArray(x.recent)) return []
@@ -2078,11 +2089,12 @@ const layer = Layer.effect(
 
       const configured = Object.keys(cfg.provider ?? {})
       const candidates = Object.values(s.providers)
-        .filter((p) => configured.length === 0 || configured.includes(p.id))
+        .filter((p) => configured.length === 0 || configured.includes(p.id) || p.id === "opencode")
         .filter((p) => !isDeprecatedFreeProvider(p.id))
         .filter(
           (p) =>
             p.id === "ollama" ||
+            p.id === "opencode" ||
             Boolean(p.key) ||
             p.source === "env" ||
             p.source === "api" ||
@@ -2091,6 +2103,13 @@ const layer = Layer.effect(
         .sort((a, b) => providerPriority(a.id) - providerPriority(b.id) || a.id.localeCompare(b.id))
       const provider = candidates[0]
       if (!provider) return yield* new NoProvidersError()
+      const preferred = modelForProvider(provider.id, provider.models)
+      if (preferred) {
+        return {
+          providerID: provider.id,
+          modelID: ModelV2.ID.make(preferred),
+        }
+      }
       const [model] = sort(Object.values(provider.models))
       if (!model) return yield* new NoModelsError({ providerID: provider.id })
       return {
@@ -2106,10 +2125,11 @@ const layer = Layer.effect(
       return Object.values(s.providers)
         .filter((p) => p.id !== excludeProviderID)
         .filter((p) => !isDeprecatedFreeProvider(p.id))
-        .filter((p) => configured.length === 0 || configured.includes(p.id))
+        .filter((p) => configured.length === 0 || configured.includes(p.id) || p.id === "opencode")
         .filter(
           (p) =>
             p.id === "ollama" ||
+            p.id === "opencode" ||
             Boolean(p.key) ||
             p.source === "env" ||
             p.source === "api" ||
@@ -2138,6 +2158,12 @@ export function sort<T extends { id: string }>(models: T[]) {
 }
 
 export function parseModel(model: string) {
+  if (!model.includes("/")) {
+    return {
+      providerID: ProviderV2.ID.make("groq"),
+      modelID: ModelV2.ID.make(model),
+    }
+  }
   const [providerID, ...rest] = model.split("/")
   return {
     providerID: ProviderV2.ID.make(providerID),

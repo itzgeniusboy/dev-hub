@@ -160,6 +160,12 @@ export const ConfigSetCommand = cmd({
           data.provider = data.provider && typeof data.provider === "object" ? data.provider : {}
           data.provider[providerID] = { ...(data.provider[providerID] ?? {}), ...definition }
         }
+        
+        // Remove stale/legacy model reference so the provider's preferred model is chosen
+        if (typeof data.model === "string") {
+          delete data.model
+        }
+        
         writeNexusConfig(configPath, data)
         UI.println(UI.Style.TEXT_SUCCESS_BOLD + "✓  " + UI.Style.TEXT_NORMAL + `${providerID} API key configured`)
         return

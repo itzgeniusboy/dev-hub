@@ -30,9 +30,17 @@ export class RotationEngine {
     const message = error instanceof Error ? error.message : String(error)
     return /rate.?limit|too many requests|quota exceeded|freeusagelimit/i.test(message)
   }
+
+  /** Provider failures that should advance to another configured engine. */
+  static isFallbackable(error: unknown): boolean {
+    const message = error instanceof Error ? error.message : String(error)
+    return /rate.?limit|too many requests|quota exceeded|freeusagelimit|(?:model|resource).*(?:not found|does not exist|do not have access)|(?:invalid|missing).*(?:api key|authentication)|unauthorized|forbidden|invalid api key|missing authentication header/i.test(
+      message,
+    )
+  }
 }
 
-export const PROVIDER_FALLBACK_ORDER = ["groq", "openrouter", "google", "ollama", "openai", "opencode"] as const
+export const PROVIDER_FALLBACK_ORDER = ["groq", "openrouter", "google", "ollama", "opencode", "openai"] as const
 
 /** Canonical low-cost/free model order used by setup, default selection, and model tests. */
 export const PREFERRED_MODELS = {
@@ -68,7 +76,7 @@ export function providerPriority(providerID: string): number {
 }
 
 export function isDeprecatedFreeProvider(providerID: string): boolean {
-  return providerID === "opencode" || providerID === "nexus"
+  return false // We want opencode to be available as a fallback
 }
 
 export function modelWarning(providerID: string): string | undefined {

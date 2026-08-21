@@ -4,7 +4,7 @@ import { PermissionV1 } from "@nexus-ai/core/v1/permission"
 import { Provider } from "@/provider/provider"
 import { SessionV1 } from "@nexus-ai/core/v1/session"
 import { serviceUse } from "@nexus-ai/core/effect/service-use"
-import { Context, Effect, Layer } from "effect"
+import { Context, Effect, Layer, Exit, Cause } from "effect"
 import * as Stream from "effect/Stream"
 import { streamText, wrapLanguageModel, type ModelMessage, type Tool } from "ai"
 import type { LLMEvent } from "@nexus-ai/llm"
@@ -391,24 +391,35 @@ const live: Layer.Layer<
               Effect.gen(function* () {
                 const [candidate, ...rest] = remaining
                 if (!candidate) return yield* Effect.dieMessage("No fallback model is available")
-                const model = yield* provider.getModel(candidate.providerID, candidate.modelID)
-                const current = yield* toStream(model)
+                const nextFallback = (cause: unknown) => {
+                  let message = typeof cause === "string" ? cause : (cause instanceof Error ? cause.message : String(cause))
+                  try { message = Cause.pretty(cause as any) } catch (e) {}
+                  if (!RotationEngine.isFallbackable(message) || rest.length === 0) return undefined
+                  const next = rest[0]
+                  return Effect.gen(function* () {
+                    yield* Effect.logWarning("provider failed; switching model", {
+                      fromProviderID: candidate.providerID,
+                      fromModelID: candidate.modelID,
+                      toProviderID: next.providerID,
+                      toModelID: next.modelID,
+                    })
+                    return yield* attempt(rest)
+                  })
+                }
+
+                const modelExit = yield* Effect.exit(provider.getModel(candidate.providerID, candidate.modelID))
+                if (Exit.isFailure(modelExit)) {
+                  const fallback = nextFallback(modelExit.cause)
+                  if (fallback) return yield* fallback
+                  return yield* Effect.failCause(modelExit.cause)
+                }
+                const current = yield* toStream(modelExit.value)
+
                 return current.pipe(
                   Stream.catchCause((cause) => {
-                    const message = Cause.pretty(cause)
-                    if (!RotationEngine.isRateLimited(message) || rest.length === 0) return Stream.failCause(cause)
-                    const next = rest[0]
-                    return Stream.unwrap(
-                      Effect.gen(function* () {
-                        yield* Effect.logWarning("provider rate limit; switching model", {
-                          fromProviderID: candidate.providerID,
-                          fromModelID: candidate.modelID,
-                          toProviderID: next.providerID,
-                          toModelID: next.modelID,
-                        })
-                        return yield* attempt(rest)
-                      }),
-                    )
+                    const fallback = nextFallback(cause)
+                    if (fallback) return Stream.unwrap(fallback)
+                    return Stream.failCause(cause)
                   }),
                 )
               })
