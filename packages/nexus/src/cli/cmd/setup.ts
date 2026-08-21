@@ -85,7 +85,7 @@ async function validateKey(provider: KeyProvider, key: string): Promise<boolean>
       const catalog = (await catalogResponse.json().catch(() => ({ data: [] }))) as { data?: Array<{ id?: string }> }
       const ids = (catalog.data ?? []).map((item) => item.id).filter((id): id is string => Boolean(id))
       const preferred = PREFERRED_MODELS[provider]
-      const model = preferred.find((id) => ids.includes(id)) ?? ids.find((id) => preferred.some((wanted) => id.startsWith(wanted.split(":")[0])))
+      const model = preferred.find((id) => ids.includes(id)) ?? ids.find((id) => preferred.some((wanted) => id.startsWith(wanted.split(":")[0]))) ?? ids[0]
       if (!model) return false
       const testURL = `${baseURL}/chat/completions`
       const testResponse = await fetch(testURL, {
@@ -110,7 +110,7 @@ async function validateKey(provider: KeyProvider, key: string): Promise<boolean>
     const preferred = PREFERRED_MODELS.google
     const model =
       preferred.find((id) => ids.includes(id)) ??
-      ids.find((id) => /gemini-(?:2\.5|2\.0|1\.5)-flash(?:$|-)/i.test(id))
+      ids.find((id) => /gemini-(?:2\.5|2\.0|1\.5)-flash(?:$|-)/i.test(id)) ?? ids[0]
     if (!model) return false
     const testURL = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(normalizedKey)}`
     const testResponse = await fetch(testURL, {
