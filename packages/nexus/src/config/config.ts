@@ -36,6 +36,10 @@ import { ConfigVariable } from "./variable"
 import { Npm } from "@nexus-ai/core/npm"
 import { withTransientReadRetry } from "@/util/effect-http-client"
 
+// External workspace plugins retain the upstream package identity and version.
+// The NEXUS fork's release version is not published under that upstream scope.
+const ExternalPluginVersion = "1.18.19"
+
 // Custom merge function that concatenates array fields instead of replacing them
 // Keep remeda's deep conditional merge type out of hot config-loading paths; TS profiling showed it dominates here.
 function mergeConfig(target: Info, source: Info): Info {
@@ -439,8 +443,8 @@ const layer = Layer.effect(
             .install(dir, {
               add: [
                 {
-                  name: "@nexus-ai/plugin",
-                  version: InstallationLocal ? undefined : InstallationVersion,
+                  name: "@opencode-ai/plugin",
+                  version: InstallationLocal ? undefined : ExternalPluginVersion,
                 },
               ],
             })

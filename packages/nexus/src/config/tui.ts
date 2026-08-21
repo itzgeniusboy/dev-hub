@@ -24,6 +24,9 @@ import { Npm } from "@nexus-ai/core/npm"
 import { FormatError, FormatUnknownError } from "@/cli/error"
 import { TuiConfig } from "@nexus-ai/tui/config"
 
+// External workspace plugins retain the upstream package identity and version.
+const ExternalPluginVersion = "1.18.19"
+
 export const Info = TuiConfig.Info
 export type Info = TuiConfig.Info
 
@@ -238,8 +241,8 @@ const layer = Layer.effect(
           .install(dir, {
             add: [
               {
-                name: "@nexus-ai/plugin",
-                version: InstallationLocal ? undefined : InstallationVersion,
+                name: "@opencode-ai/plugin",
+                version: InstallationLocal ? undefined : ExternalPluginVersion,
               },
             ],
           })

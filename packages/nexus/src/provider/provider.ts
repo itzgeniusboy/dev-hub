@@ -166,6 +166,30 @@ function selectBedrockMantleLanguageModel(sdk: BundledSDK, modelID: string) {
 }
 
 function custom(dep: CustomDep): Record<string, CustomLoader> {
+  const publicCatalog = Effect.fnUntraced(function* (input: Info) {
+    const env = yield* dep.env()
+    const hasKey = iife(() => {
+      if (input.env.some((item) => env[item])) return true
+      return false
+    })
+    const ok =
+      hasKey ||
+      Boolean(yield* dep.auth(input.id)) ||
+      Boolean((yield* dep.config()).provider?.[input.id]?.options?.apiKey)
+
+    if (!ok) {
+      for (const [key, value] of Object.entries(input.models)) {
+        if (value.cost.input === 0) continue
+        delete input.models[key]
+      }
+    }
+
+    return {
+      autoload: Object.keys(input.models).length > 0,
+      options: ok ? {} : { apiKey: "public" },
+    }
+  })
+
   return {
     anthropic: () =>
       Effect.succeed({
@@ -176,29 +200,10 @@ function custom(dep: CustomDep): Record<string, CustomLoader> {
           },
         },
       }),
-    nexus: Effect.fnUntraced(function* (input: Info) {
-      const env = yield* dep.env()
-      const hasKey = iife(() => {
-        if (input.env.some((item) => env[item])) return true
-        return false
-      })
-      const ok =
-        hasKey ||
-        Boolean(yield* dep.auth(input.id)) ||
-        Boolean((yield* dep.config()).provider?.["nexus"]?.options?.apiKey)
-
-      if (!ok) {
-        for (const [key, value] of Object.entries(input.models)) {
-          if (value.cost.input === 0) continue
-          delete input.models[key]
-        }
-      }
-
-      return {
-        autoload: Object.keys(input.models).length > 0,
-        options: ok ? {} : { apiKey: "public" },
-      }
-    }),
+    // The upstream catalog still uses the historical provider ID; keep it as
+    // an internal compatibility alias while exposing NEXUS in the UI.
+    opencode: publicCatalog,
+    nexus: publicCatalog,
     openai: () =>
       Effect.succeed({
         autoload: false,
