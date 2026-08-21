@@ -2,6 +2,7 @@
 
 import { $ } from "bun"
 import path from "path"
+import { readFileSync } from "node:fs"
 import { fileURLToPath } from "url"
 import { createSolidTransformPlugin } from "@opentui/solid/bun-plugin"
 
@@ -22,6 +23,15 @@ const skipInstall = process.argv.includes("--skip-install")
 const sourcemapsFlag = process.argv.includes("--sourcemaps")
 const plugin = createSolidTransformPlugin()
 const skipEmbedWebUi = process.argv.includes("--skip-embed-web-ui")
+const templateNames = ["echo", "downloader", "group-manager", "ai-chat", "termux-control", "file-manager", "notes", "reminder", "url-shortener", "weather"]
+const embeddedTemplates = Object.fromEntries(
+  templateNames.map((template) => [
+    template,
+    Object.fromEntries(
+      ["main.py", "install.sh"].map((file) => [file, readFileSync(path.join(dir, "src/telegram/templates", template, file), "utf8")]),
+    ),
+  ]),
+)
 const targetFlag = process.argv.find((arg) => arg.startsWith("--target="))?.slice("--target=".length)
 
 const createEmbeddedWebUIBundle = async () => {
@@ -199,6 +209,7 @@ for (const item of targets) {
       OPENCODE_MODELS_DEV: generated.modelsData,
       OTUI_TREE_SITTER_WORKER_PATH: bunfsRoot + treeSitterWorkerPath,
       OPENCODE_WORKER_PATH: workerPath,
+      DEV_HUB_EMBEDDED_TEMPLATES: JSON.stringify(embeddedTemplates),
       OPENCODE_CHANNEL: `'${Script.channel}'`,
       OPENCODE_LIBC: item.os === "linux" ? `'${item.abi ?? "glibc"}'` : "",
       ...(item.os === "linux" ? { "process.env.OPENTUI_LIBC": JSON.stringify(item.abi ?? "glibc") } : {}),

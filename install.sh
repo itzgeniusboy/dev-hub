@@ -367,9 +367,23 @@ if [ -n "${GITHUB_ACTIONS-}" ] && [ "${GITHUB_ACTIONS}" = "true" ]; then
     print_message info "Added $INSTALL_DIR to \$GITHUB_PATH"
 fi
 
+install_command_alias() {
+    local alias_dir
+    if [ "$is_termux" = "true" ] && [ -n "${PREFIX:-}" ]; then
+        alias_dir="$PREFIX/bin"
+    else
+        alias_dir="$HOME/.local/bin"
+    fi
+    mkdir -p "$alias_dir"
+    ln -sf "$INSTALL_DIR/dev-hub" "$alias_dir/devhub"
+}
+
+install_command_alias
+
 echo -e "\n${MUTED}Dev Hub is installed.${NC}"
 echo -e ""
 echo -e "source <your-shell-config>  ${MUTED}# Reload PATH, if needed${NC}"
+echo -e "devhub                   ${MUTED}# Run Dev Hub (alias)${NC}"
 echo -e "dev-hub                  ${MUTED}# Run Dev Hub${NC}"
 echo -e ""
 echo -e "${MUTED}For more information visit ${NC}https://github.com/$REPO"

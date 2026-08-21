@@ -5,6 +5,7 @@ import { GenerateCommand } from "./cli/cmd/generate"
 import { ConsoleCommand } from "./cli/cmd/account"
 import { ProvidersCommand } from "./cli/cmd/providers"
 import { AgentCommand } from "./cli/cmd/agent"
+import { BotCommand } from "./cli/cmd/bot"
 import { UpgradeCommand } from "./cli/cmd/upgrade"
 import { UninstallCommand } from "./cli/cmd/uninstall"
 import { ModelsCommand } from "./cli/cmd/models"
@@ -34,7 +35,7 @@ const args = hideBin(process.argv)
 
 function show(out: string) {
   const text = out.trimStart()
-  if (!text.startsWith("opencode ")) {
+  if (!text.startsWith("opencode ") && !text.startsWith("devhub ")) {
     process.stderr.write(UI.logo() + EOL + EOL)
     process.stderr.write(text + EOL)
     return
@@ -44,7 +45,7 @@ function show(out: string) {
 
 const cli = yargs(args)
   .parserConfiguration({ "populate--": true })
-  .scriptName("opencode")
+  .scriptName("devhub")
   .wrap(100)
   .help("help", "show help")
   .alias("help", "h")
@@ -88,6 +89,7 @@ const cli = yargs(args)
   .command(ConsoleCommand)
   .command(ProvidersCommand)
   .command(AgentCommand)
+  .command(BotCommand)
   .command(UpgradeCommand)
   .command(UninstallCommand)
   .command(ServeCommand)
