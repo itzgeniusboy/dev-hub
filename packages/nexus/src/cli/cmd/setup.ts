@@ -85,8 +85,15 @@ async function validateKey(provider: KeyProvider, key: string): Promise<boolean>
       const catalog = (await catalogResponse.json().catch(() => ({ data: [] }))) as { data?: Array<{ id?: string }> }
       const ids = (catalog.data ?? []).map((item) => item.id).filter((id): id is string => Boolean(id))
       const preferred = PREFERRED_MODELS[provider]
-      const model = preferred.find((id) => ids.includes(id)) ?? ids.find((id) => preferred.some((wanted) => id.startsWith(wanted.split(":")[0]))) ?? ids[0]
-      if (!model) return false
+      const FALLBACK = { groq: "llama-3.3-70b-versatile", openrouter: "openai/gpt-oss-120b:free" } as const
+      const safeFallback = provider === "groq" || provider === "openrouter" ? FALLBACK[provider] : undefined
+      const model = preferred.find((id) => ids.includes(id)) ?? 
+                    ids.find((id) => preferred.some((wanted) => id.startsWith(wanted.split(":")[0]))) ?? 
+                    (safeFallback && ids.includes(safeFallback) ? safeFallback : null)
+      if (!model) {
+        console.error(`❌ No compatible chat model found for validation in provider catalog.`)
+        return false
+      }
       const testURL = `${baseURL}/chat/completions`
       const testResponse = await fetch(testURL, {
         method: "POST",
@@ -104,13 +111,14 @@ async function validateKey(provider: KeyProvider, key: string): Promise<boolean>
       models?: Array<{ name?: string; supportedGenerationMethods?: string[] }>
     }
     const ids = (catalog.models ?? [])
-      .filter((item) => item.supportedGenerationMethods?.includes("generateContent") ?? true)
+      .filter((item) => (item.supportedGenerationMethods ?? []).includes("generateContent"))
       .map((item) => item.name?.replace(/^models\//, ""))
       .filter((id): id is string => Boolean(id))
     const preferred = PREFERRED_MODELS.google
     const model =
       preferred.find((id) => ids.includes(id)) ??
-      ids.find((id) => /gemini-(?:2\.5|2\.0|1\.5)-flash(?:$|-)/i.test(id)) ?? ids[0]
+      ids.find((id) => /gemini-(?:2\.5|2\.0|1\.5)-flash(?:$|-)/i.test(id)) ??
+      "gemini-1.5-flash"
     if (!model) return false
     const testURL = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(normalizedKey)}`
     const testResponse = await fetch(testURL, {
