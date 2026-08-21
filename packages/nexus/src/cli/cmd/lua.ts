@@ -3,7 +3,7 @@ import { Effect } from "effect"
 
 export const LuaCommand = effectCmd({
   command: "lua <action> <script>",
-  describe: "Lua Modding Studio (Authorized use only)",
+  describe: "Lua Modding Studio",
   builder: (yargs) =>
     yargs
       .positional("action", { type: "string", demandOption: true, choices: ["analyze", "format", "check"] })
@@ -15,7 +15,7 @@ export const LuaCommand = effectCmd({
 
       if (action === "analyze") {
         console.log(`[NEXUS] Analyzing Lua script ${script}...`)
-        console.log(`[NEXUS] No malicious patterns found. Safe for single-player modding.`)
+        console.log(`[NEXUS] Analysis complete.`)
       } else if (action === "format") {
         console.log(`[NEXUS] Formatting Lua script ${script}...`)
         console.log(`[NEXUS] Formatted successfully.`)

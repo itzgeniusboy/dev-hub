@@ -8,6 +8,7 @@ import { getCachedKeyStatus } from "../api/ApiVault"
  */
 export class RotationEngine {
   private readonly positions = new Map<string, number>()
+  private readonly selectedKeys = new Map<string, string>()
 
   constructor(
     private readonly keys: RotatingKeys = {},
@@ -62,6 +63,7 @@ export class RotationEngine {
         // Update the position in the map to the index *after* the one we just picked,
         // so the next call starts searching from the subsequent key.
         this.positions.set(providerID, (index + 1) % allValues.length)
+        this.selectedKeys.set(providerID, value)
         break
       }
     }
@@ -71,6 +73,11 @@ export class RotationEngine {
     }
 
     return undefined
+  }
+
+  current(providerID: string): string | undefined {
+    if (!this.enabled) return undefined
+    return this.selectedKeys.get(providerID)
   }
 
   has(providerID: string): boolean {

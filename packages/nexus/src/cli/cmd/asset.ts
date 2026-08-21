@@ -3,7 +3,7 @@ import { Effect } from "effect"
 
 export const AssetCommand = effectCmd({
   command: "asset <action> <pak>",
-  describe: "Game Asset Analyzer (Authorized use only)",
+  describe: "Game Asset Analyzer",
   builder: (yargs) =>
     yargs
       .positional("action", { type: "string", demandOption: true, choices: ["list", "extract", "search", "info"] })
@@ -23,7 +23,7 @@ export const AssetCommand = effectCmd({
         files.forEach((f: any) => console.log(`- ${f.path} (${f.size} bytes, ${f.compression})`))
       } else if (action === "extract") {
         console.log(`[NEXUS] Extracting from ${pak}...`)
-        console.log(`[NEXUS] Extraction complete. Note: This tool is for authorized use only.`)
+        console.log(`[NEXUS] Extraction complete.`)
       } else if (action === "search") {
         const results = yield* AssetReaderService.searchByType(pak, type || "texture")
         console.log(`[NEXUS] Search results for type ${type || "texture"} in ${pak}:`)

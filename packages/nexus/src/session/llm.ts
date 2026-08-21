@@ -426,6 +426,7 @@ const live: Layer.Layer<
                     if (currentUsedKey) {
                       yield* Effect.promise(() => import("../api/ApiVault").then((m) => m.updateApiKeyStatus(candidate.providerID, currentUsedKey, status)))
                     }
+                    yield* provider.invalidateLanguage(candidate.providerID, candidate.modelID)
                     const sameProviderKeyCount = yield* provider.rotationKeyCount(candidate.providerID)
                     if (sameProviderKeyCount > retryCount + 1) {
                       yield* Effect.logWarning("provider failed; retrying same provider with next key", {
@@ -457,9 +458,10 @@ const live: Layer.Layer<
                 const current = yield* toStream(modelExit.value)
                 
                 // Hook to reset failures on success
-                yield* Effect.promise(() => Promise.resolve(
-                  updateApiKeyStatus(candidate.providerID, currentUsedKey, "active")
-                ))
+                const currentUsedKey = yield* provider.currentKey(candidate.providerID)
+                if (currentUsedKey) {
+                  yield* Effect.promise(() => import("../api/ApiVault").then((m) => m.updateApiKeyStatus(candidate.providerID, currentUsedKey, "active")))
+                }
 
                 return current.pipe(
                   Stream.catchCause((cause) => {
