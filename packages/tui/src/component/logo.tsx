@@ -50,8 +50,13 @@ export function Logo() {
     <box>
       <For each={logo.left}>
         {(line, index) => (
-          <box flexDirection="row" gap={1}>
+          <box flexDirection="row" gap={index() === 2 ? 0 : 1}>
             <box flexDirection="row">{renderLine(line, theme.textMuted, false)}</box>
+            {index() === 2 && (
+              <text fg={theme.text} attributes={TextAttributes.BOLD} selectable={false}>
+                -
+              </text>
+            )}
             <box flexDirection="row">{renderLine(logo.right[index()], theme.text, true)}</box>
           </box>
         )}
