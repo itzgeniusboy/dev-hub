@@ -7,6 +7,9 @@
     "@types/node": "catalog:"
   },
   "main": "dist/index.js",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "typecheck": "tsc --noEmit"
   }

@@ -10,14 +10,13 @@ export const DoCommand = cmd({
   }),
   async handler(args: { task: string }) {
     try {
-      const modulePath = "../../../../termux-core/src/index.ts"
-      const { Businessman } = await import(modulePath)
+      const { Businessman } = await import("@nexus/termux-core")
       const businessman = new Businessman()
       await businessman.handleTask(args.task)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
       if (message.includes("Cannot find module") || message.includes("Module not found")) {
-        process.stderr.write("Termux core not built. Run: cd packages/termux-core && bun run typecheck\n")
+        process.stderr.write("Termux core is unavailable. Reinstall NEXUS or run: bun install\n")
         return
       }
       throw error

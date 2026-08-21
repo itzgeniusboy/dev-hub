@@ -90,6 +90,7 @@
     "@nexus-ai/sdk": "workspace:*",
     "@nexus-ai/server": "workspace:*",
     "@nexus-ai/tui": "workspace:*",
+    "@nexus/termux-core": "workspace:*",
     "@octokit/graphql": "9.0.2",
     "@octokit/rest": "catalog:",
     "@openauthjs/openauth": "catalog:",

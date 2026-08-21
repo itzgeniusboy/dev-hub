@@ -255,6 +255,9 @@ export const ProvidersListCommand = effectCmd({
     const authSvc = yield* Auth.Service
     const modelsDev = yield* ModelsDev.Service
 
+    const { FreelancerDB } = yield* Effect.promise(() => import("@nexus/termux-core"))
+    const freelancers = new FreelancerDB().list()
+
     UI.empty()
     const authPath = path.join(Global.Path.data, "auth.json")
     const homedir = os.homedir()
@@ -293,6 +296,15 @@ export const ProvidersListCommand = effectCmd({
 
       yield* Prompt.outro(`${activeEnvVars.length} environment variable` + (activeEnvVars.length === 1 ? "" : "s"))
     }
+
+    UI.empty()
+    yield* Prompt.intro("Termux freelancer database")
+    for (const freelancer of freelancers) {
+      yield* Prompt.log.info(
+        `${freelancer.name} ${UI.Style.TEXT_DIM}${freelancer.type} · ${freelancer.sizeMB}MB · ${freelancer.tags.join(", ")}`,
+      )
+    }
+    yield* Prompt.outro(`${freelancers.length} freelancers available`)
   }),
 })
 
