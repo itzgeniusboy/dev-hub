@@ -73,7 +73,7 @@ export class UserLiaison {
       case "command":
         return this.handleCommand(message, userId)
       case "complaint":
-        return "Samajh gaya. Error ya expected result bhejo; main usse Senior Dev workflow mein analyze karunga."
+        return "Understood. Share the error or expected result and I will analyze it through the Senior Dev workflow."
       case "small_task":
         return this.executeSmallTask(message, root, userId)
       case "big_task":
