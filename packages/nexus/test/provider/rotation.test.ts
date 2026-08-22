@@ -5,6 +5,7 @@ import {
   addApiKey,
   apiVaultPublicRows,
   ensureApiKey,
+  removeManagedApiKey,
   getCachedKeyStatus,
   loadApiVault,
   resetApiVaultForTests,
@@ -47,6 +48,15 @@ describe("provider key UI data", () => {
     expect(rows).toHaveLength(1)
     expect(rows[0]?.keys[0]?.key).not.toBe(raw)
     expect(JSON.stringify(rows)).not.toContain(raw)
+  })
+
+  test("removes managed UI keys without deleting CLI keys", () => {
+    addApiKey("openrouter", "cli-key", "cli", "cli")
+    addApiKey("openrouter", "ui-key", "ui", "ui")
+
+    expect(removeManagedApiKey("openrouter", "ui-key")).toBe(true)
+    expect(removeManagedApiKey("openrouter", "cli-key")).toBe(false)
+    expect(loadApiVault().providers.openrouter.map((entry) => entry.key)).toEqual(["cli-key"])
   })
 })
 

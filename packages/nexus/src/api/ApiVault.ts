@@ -15,12 +15,15 @@ export const API_PROVIDERS = [
 export type ApiProvider = (typeof API_PROVIDERS)[number]
 export type ApiKeyStatus = "active" | "rate_limited" | "invalid" | "suspended" | "unknown"
 
+export type ApiKeySource = "ui" | "auth" | "cli"
+
 export interface ApiKeyEntry {
   key: string
   label: string
   added: string
   status: ApiKeyStatus
   failures: number
+  source?: ApiKeySource
   suspendedUntil?: string
   lastChecked?: string
 }
@@ -65,12 +68,14 @@ function normalizeEntry(value: unknown): ApiKeyEntry | undefined {
     status === "active" || status === "rate_limited" || status === "invalid" || status === "suspended"
       ? status
       : "unknown"
+  const source = item.source === "ui" || item.source === "auth" || item.source === "cli" ? item.source : undefined
   return {
     key: item.key.trim(),
     label: typeof item.label === "string" && item.label.trim() ? item.label.trim() : "default",
     added: typeof item.added === "string" ? item.added : new Date().toISOString().slice(0, 10),
     status: validStatus,
     failures: typeof item.failures === "number" && Number.isFinite(item.failures) ? item.failures : 0,
+    ...(source ? { source } : {}),
     ...(typeof item.suspendedUntil === "string" ? { suspendedUntil: item.suspendedUntil } : {}),
     ...(typeof item.lastChecked === "string" ? { lastChecked: item.lastChecked } : {}),
   }
@@ -165,13 +170,19 @@ export function ensureApiKey(providerInput: string, key: string, label = "auth")
     added: new Date().toISOString().slice(0, 10),
     status: "unknown",
     failures: 0,
+    source: "auth",
   }
   vault.providers[provider] = [...entries, entry]
   saveApiVault(vault)
   return entry
 }
 
-export function addApiKey(providerInput: string, key: string, label = "default"): ApiKeyEntry {
+export function addApiKey(
+  providerInput: string,
+  key: string,
+  label = "default",
+  source: ApiKeySource = "cli",
+): ApiKeyEntry {
   const provider = normalizeProvider(providerInput)
   if (!provider) throw new Error(`Unsupported provider: ${providerInput}. Supported: ${API_PROVIDERS.join(", ")}`)
   if (!key.trim()) throw new Error("API key cannot be empty")
@@ -180,6 +191,7 @@ export function addApiKey(providerInput: string, key: string, label = "default")
   const existing = entries.find((entry) => entry.key === key.trim())
   if (existing) {
     existing.label = label.trim() || existing.label
+    existing.source ??= source
     existing.status = "active"
     existing.failures = 0
     saveApiVault(vault)
@@ -191,10 +203,29 @@ export function addApiKey(providerInput: string, key: string, label = "default")
     added: new Date().toISOString().slice(0, 10),
     status: "active",
     failures: 0,
+    source,
   }
   vault.providers[provider] = [...entries, entry]
   saveApiVault(vault)
   return entry
+}
+
+export function removeManagedApiKey(providerInput: string, key: string): boolean {
+  const provider = normalizeProvider(providerInput)
+  if (!provider) return false
+  const vault = loadApiVault()
+  const entries = vault.providers[provider] ?? []
+  const value = key.trim()
+  const index = entries.findIndex(
+    (entry) =>
+      entry.key === value &&
+      (entry.source === "ui" || entry.source === "auth" || entry.label === "ui" || entry.label === "auth"),
+  )
+  if (index < 0) return false
+  vault.providers[provider] = entries.filter((_, position) => position !== index)
+  if (vault.providers[provider].length === 0) delete vault.providers[provider]
+  saveApiVault(vault)
+  return true
 }
 
 export function removeApiKey(providerInput: string, index: number): ApiKeyEntry {
@@ -338,7 +369,12 @@ function modelNames(value: unknown): string[] {
         return undefined
       const name = typeof row.id === "string" ? row.id : typeof row.name === "string" ? row.name : undefined
       const normalized = name?.replace("models/", "")
-      if (normalized && /(?:tts|native-audio|audio|image|video|embedding|embed|speech|lyria|music|deep-research|computer-use|robotics|banana)/i.test(normalized)) {
+      if (
+        normalized &&
+        /(?:tts|native-audio|audio|image|video|embedding|embed|speech|lyria|music|deep-research|computer-use|robotics|banana)/i.test(
+          normalized,
+        )
+      ) {
         return undefined
       }
       return normalized

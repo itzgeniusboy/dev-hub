@@ -186,25 +186,25 @@ const SettingsProvidersContent: Component<{ onBack?: () => void }> = (props) => 
                       <span class="text-14-medium text-text-strong truncate">{item.name}</span>
                       <Tag>{type(item)}</Tag>
                     </div>
-                    <Show
-                      when={canDisconnect(item)}
-                      fallback={
-                        <span class="text-14-regular text-text-base opacity-0 group-hover:opacity-100 transition-opacity duration-200 pr-3 cursor-default">
-                          {language.t("settings.providers.connected.environmentDescription")}
-                        </span>
-                      }
-                    >
-                      <div class="flex items-center gap-2">
-                        <Show when={canManageKeys(item.id)}>
-                          <Button size="large" variant="ghost" onClick={() => manageKeys(item.id)}>
-                            Manage API keys
-                          </Button>
-                        </Show>
+                    <div class="flex items-center gap-2">
+                      <Show when={canManageKeys(item.id)}>
+                        <Button size="large" variant="ghost" onClick={() => manageKeys(item.id)}>
+                          Manage API keys
+                        </Button>
+                      </Show>
+                      <Show
+                        when={canDisconnect(item)}
+                        fallback={
+                          <span class="text-14-regular text-text-base opacity-0 group-hover:opacity-100 transition-opacity duration-200 pr-3 cursor-default">
+                            {language.t("settings.providers.connected.environmentDescription")}
+                          </span>
+                        }
+                      >
                         <Button size="large" variant="ghost" onClick={() => void disconnect(item.id, item.name)}>
                           {language.t("common.disconnect")}
                         </Button>
-                      </div>
-                    </Show>
+                      </Show>
+                    </div>
                   </div>
                 )}
               </For>
@@ -260,9 +260,16 @@ const SettingsProvidersContent: Component<{ onBack?: () => void }> = (props) => 
                       {(key) => <span class="text-12-regular text-text-weak pl-8">{language.t(key())}</span>}
                     </Show>
                   </div>
-                  <Button size="large" variant="secondary" icon="plus-small" onClick={() => connect(item.id)}>
-                    {language.t("common.connect")}
-                  </Button>
+                  <div class="flex items-center gap-2">
+                    <Show when={canManageKeys(item.id)}>
+                      <Button size="large" variant="ghost" onClick={() => manageKeys(item.id)}>
+                        Manage API keys
+                      </Button>
+                    </Show>
+                    <Button size="large" variant="secondary" icon="plus-small" onClick={() => connect(item.id)}>
+                      {language.t("common.connect")}
+                    </Button>
+                  </div>
                 </div>
               )}
             </For>

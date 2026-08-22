@@ -5,7 +5,7 @@ import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { RootHttpApi } from "../api"
 import { LogInput } from "../groups/control"
 import { ProviderV2 } from "@nexus-ai/core/provider"
-import { addApiKey } from "@/api/ApiVault"
+import { addApiKey, removeManagedApiKey } from "@/api/ApiVault"
 
 export const controlHandlers = HttpApiBuilder.group(RootHttpApi, "control", (handlers) =>
   Effect.gen(function* () {
@@ -18,7 +18,7 @@ export const controlHandlers = HttpApiBuilder.group(RootHttpApi, "control", (han
       yield* auth.set(ctx.params.providerID, ctx.payload).pipe(Effect.orDie)
       if (ctx.payload.type === "api") {
         try {
-          addApiKey(ctx.params.providerID, ctx.payload.key, "ui")
+          addApiKey(ctx.params.providerID, ctx.payload.key, "ui", "ui")
         } catch {
           // Providers outside ApiVault continue to use the regular Auth store.
         }
@@ -29,7 +29,9 @@ export const controlHandlers = HttpApiBuilder.group(RootHttpApi, "control", (han
     const authRemove = Effect.fn("ControlHttpApi.authRemove")(function* (ctx: {
       params: { providerID: ProviderV2.ID }
     }) {
+      const current = yield* auth.get(ctx.params.providerID).pipe(Effect.orElseSucceed(() => undefined))
       yield* auth.remove(ctx.params.providerID).pipe(Effect.orDie)
+      if (current?.type === "api") removeManagedApiKey(ctx.params.providerID, current.key)
       return true
     })
 

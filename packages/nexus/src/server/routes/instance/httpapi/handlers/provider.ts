@@ -133,7 +133,7 @@ export const providerHandlers = HttpApiBuilder.group(InstanceHttpApi, "provider"
     }) {
       let entry: ReturnType<typeof addApiKey>
       try {
-        entry = addApiKey(ctx.payload.provider, ctx.payload.key, ctx.payload.label ?? "default")
+        entry = addApiKey(ctx.payload.provider, ctx.payload.key, ctx.payload.label ?? "default", "ui")
       } catch (error) {
         return yield* Effect.fail(vaultError(error, ctx.payload.provider))
       }
