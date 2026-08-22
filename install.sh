@@ -234,7 +234,7 @@ check_version() {
 }
 
 install_termux_runtime() {
-    if [ "$is_termux" != "true" ] || [ "$binary_path" != "" ]; then
+    if [ "$is_termux" != "true" ]; then
         return 0
     fi
 
@@ -262,38 +262,20 @@ install_termux_runtime() {
     fi
 }
 
-download_and_install() {
-    print_message info "\n${MUTED}Installing ${NC}NEXUS ${MUTED}version: ${NC}$specific_version"
-    local tmp_dir="${TMPDIR:-/tmp}/dev_hub_install_$$"
-    mkdir -p "$tmp_dir"
+write_termux_wrapper() {
+    local wrapper_path="$1"
+    local termux_bash="${PREFIX:-}/bin/bash"
 
-    if ! curl -fL --retry 3 --connect-timeout 15 -# -o "$tmp_dir/$filename" "$url"; then
-        rm -rf "$tmp_dir"
-        echo -e "${RED}Download failed: $url${NC}"
-        exit 1
+    if [ -z "${PREFIX:-}" ] || [ ! -x "$termux_bash" ]; then
+        echo -e "${RED}Termux bash was not found at ${termux_bash}.${NC}"
+        return 1
     fi
 
-    tar -xzf "$tmp_dir/$filename" -C "$tmp_dir"
-    
-    local extracted_bin="$tmp_dir/nexus"
-    if [ ! -f "$extracted_bin" ]; then
-        # The new archive packs it as nexus-x64 or nexus depending on the architecture
-        if [ -f "$tmp_dir/nexus-x64" ]; then
-            extracted_bin="$tmp_dir/nexus-x64"
-        elif [ -f "$tmp_dir/nexus-arm64" ]; then
-            extracted_bin="$tmp_dir/nexus-arm64"
-        else
-            rm -rf "$tmp_dir"
-            echo -e "${RED}Downloaded archive does not contain a nexus executable.${NC}"
-            exit 1
-        fi
-    fi
-
-    install_termux_runtime
-    if [ "$is_termux" = "true" ]; then
-        mv "$extracted_bin" "$INSTALL_DIR/nexus.bin"
-        cat > "$INSTALL_DIR/nexus" <<EOF
-#!${PREFIX}/bin/bash
+    {
+        # Keep the only installer-time substitution separate. The quoted heredoc
+        # below must preserve all variables for the launcher at runtime.
+        printf '#!%s\n' "$termux_bash"
+        cat <<'EOF'
 set -e
 # Resolve nexus/nexus symlinks so the companion binary is found in the install directory.
 SOURCE="$0"
@@ -330,12 +312,50 @@ if [[ -z "$LOADER" ]]; then
     printf '%s\n' 'Install it with: pkg install glibc-repo glibc-runner' >&2
     exit 1
 fi
-LIBRARY_PATH="\$GLIBC_PREFIX/lib"
-if [[ -d "\$GLIBC_PREFIX/lib64" ]]; then
-    LIBRARY_PATH="\$LIBRARY_PATH:\$GLIBC_PREFIX/lib64"
+LIBRARY_PATH="$GLIBC_PREFIX/lib"
+if [[ -d "$GLIBC_PREFIX/lib64" ]]; then
+    LIBRARY_PATH="$LIBRARY_PATH:$GLIBC_PREFIX/lib64"
 fi
-exec "\$LOADER" --library-path "\$LIBRARY_PATH" "\$SCRIPT_DIR/nexus.bin" "\$@"
+exec "$LOADER" --library-path "$LIBRARY_PATH" "$SCRIPT_DIR/nexus.bin" "$@"
 EOF
+    } > "$wrapper_path"
+
+    chmod 755 "$wrapper_path"
+}
+
+download_and_install() {
+    print_message info "\n${MUTED}Installing ${NC}NEXUS ${MUTED}version: ${NC}$specific_version"
+    local tmp_dir="${TMPDIR:-/tmp}/dev_hub_install_$$"
+    mkdir -p "$tmp_dir"
+
+    if ! curl -fL --retry 3 --connect-timeout 15 -# -o "$tmp_dir/$filename" "$url"; then
+        rm -rf "$tmp_dir"
+        echo -e "${RED}Download failed: $url${NC}"
+        exit 1
+    fi
+
+    tar -xzf "$tmp_dir/$filename" -C "$tmp_dir"
+
+    local extracted_bin="$tmp_dir/nexus"
+    if [ ! -f "$extracted_bin" ]; then
+        # The new archive packs it as nexus-x64 or nexus depending on the architecture
+        if [ -f "$tmp_dir/nexus-x64" ]; then
+            extracted_bin="$tmp_dir/nexus-x64"
+        elif [ -f "$tmp_dir/nexus-arm64" ]; then
+            extracted_bin="$tmp_dir/nexus-arm64"
+        else
+            rm -rf "$tmp_dir"
+            echo -e "${RED}Downloaded archive does not contain a nexus executable.${NC}"
+            exit 1
+        fi
+    fi
+
+    install_termux_runtime
+    if [ "$is_termux" = "true" ]; then
+        local wrapper_path="$INSTALL_DIR/.nexus-wrapper-$$"
+        write_termux_wrapper "$wrapper_path"
+        mv "$extracted_bin" "$INSTALL_DIR/nexus.bin"
+        mv "$wrapper_path" "$INSTALL_DIR/nexus"
         chmod 755 "$INSTALL_DIR/nexus.bin" "$INSTALL_DIR/nexus"
     else
         mv "$extracted_bin" "$INSTALL_DIR/nexus"
@@ -348,49 +368,10 @@ install_from_binary() {
     print_message info "\n${MUTED}Installing ${NC}NEXUS ${MUTED}from: ${NC}$binary_path"
     if [ "$is_termux" = "true" ]; then
         install_termux_runtime
+        local wrapper_path="$INSTALL_DIR/.nexus-wrapper-$$"
+        write_termux_wrapper "$wrapper_path"
         mv "$binary_path" "$INSTALL_DIR/nexus.bin"
-        cat > "$INSTALL_DIR/nexus" <<EOF
-#!${PREFIX}/bin/bash
-set -e
-# Resolve nexus/nexus symlinks so the companion binary is found in the install directory.
-SOURCE="\$0"
-while [[ -h "\$SOURCE" ]]; do
-    SOURCE_DIR="\$(CDPATH= cd -- "\$(dirname -- "\$SOURCE")" && pwd)"
-    SOURCE="\$(readlink "\$SOURCE")"
-    [[ "\$SOURCE" != /* ]] && SOURCE="\$SOURCE_DIR/\$SOURCE"
-done
-SCRIPT_DIR="\$(CDPATH= cd -- "\$(dirname -- "\$SOURCE")" && pwd)"
-unset LD_PRELOAD
-GLIBC_PREFIX="${PREFIX:-}/glibc"
-if [[ ! -d "\$GLIBC_PREFIX" ]]; then
-    printf '%s\n' 'NEXUS needs Termux glibc support. Install it with: pkg install glibc-repo glibc-runner' >&2
-    exit 1
-fi
-# NEXUS_TERMUX_DIRECT_LOADER_V3
-LOADER=""
-for candidate in \\
-    "\$GLIBC_PREFIX/bin/ld.so" \\
-    "\$GLIBC_PREFIX/lib/ld-linux-aarch64.so.1" \\
-    "\$GLIBC_PREFIX/lib/ld-linux-x86-64.so.2" \\
-    "\$GLIBC_PREFIX/lib64/ld-linux-aarch64.so.1" \\
-    "\$GLIBC_PREFIX/lib64/ld-linux-x86-64.so.2"; do
-    if [[ -f "\$candidate" && -x "\$candidate" ]]; then
-        LOADER="\$candidate"
-        break
-    fi
-done
-if [[ -z "\$LOADER" ]]; then
-    printf '%s\n' 'NEXUS could not find the Termux glibc dynamic loader.' >&2
-    printf '%s\n' "Expected: \$GLIBC_PREFIX/bin/ld.so or \$GLIBC_PREFIX/lib/ld-linux-*" >&2
-    printf '%s\n' 'Install it with: pkg install glibc-repo glibc-runner' >&2
-    exit 1
-fi
-LIBRARY_PATH="\$GLIBC_PREFIX/lib"
-if [[ -d "\$GLIBC_PREFIX/lib64" ]]; then
-    LIBRARY_PATH="\$LIBRARY_PATH:\$GLIBC_PREFIX/lib64"
-fi
-exec "\$LOADER" --library-path "\$LIBRARY_PATH" "\$SCRIPT_DIR/nexus.bin" "\$@"
-EOF
+        mv "$wrapper_path" "$INSTALL_DIR/nexus"
         chmod 755 "$INSTALL_DIR/nexus.bin" "$INSTALL_DIR/nexus"
     else
         cp "$binary_path" "${INSTALL_DIR}/nexus"
