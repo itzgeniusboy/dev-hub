@@ -8,6 +8,7 @@ import {
   preferredModelForProvider,
   RotationEngine,
 } from "@/provider/rotation"
+import { MODEL_MAP } from "@/api/ModelRouter"
 
 let isolatedHome = ""
 const originalHome = process.env.HOME
@@ -71,10 +72,30 @@ describe("offline provider catalog fallback", () => {
     const catalog = withLocalFallbackCatalog({}, { groq: ["test-key"] })
 
     expect(Object.keys(catalog)).toEqual(["groq"])
-    expect(catalog.groq.models["llama-3.1-8b-instant"].modalities).toEqual({ input: ["text"], output: ["text"] })
+    expect(catalog.groq.models["openai/gpt-oss-120b"].modalities).toEqual({ input: ["text"], output: ["text"] })
+    expect(catalog.groq.models["llama-3.1-8b-instant"]).toBeUndefined()
   })
 })
 
+
+describe("preferred defaults", () => {
+  test("does not retain known stale Groq or Gemini defaults", async () => {
+    const { PREFERRED_MODELS } = await import("@/provider/rotation")
+
+    expect(PREFERRED_MODELS.groq).toContain("openai/gpt-oss-120b")
+    expect(PREFERRED_MODELS.groq).not.toContain("llama-3.1-8b-instant")
+    expect(PREFERRED_MODELS.google).toContain("gemini-3.6-flash")
+    expect(PREFERRED_MODELS.google).not.toContain("gemini-3.1-flash-tts-preview")
+  })
+})
+
+describe("legacy model aliases", () => {
+  test("resolve to current text-chat defaults", () => {
+    expect(MODEL_MAP.llama3_1.providerModels.groq).toBe("openai/gpt-oss-120b")
+    expect(MODEL_MAP.gemini.providerModels.gemini).toBe("gemini-3.6-flash")
+    expect(MODEL_MAP.gemini.providerModels.openrouter).toBe("google/gemini-3.6-flash")
+  })
+})
 
 describe("setup validation model candidates", () => {
   test("accepts chat-capable catalog IDs and rejects non-chat families", async () => {

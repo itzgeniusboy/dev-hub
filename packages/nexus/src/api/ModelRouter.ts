@@ -19,7 +19,7 @@ export const MODEL_MAP = {
   llama3_1: {
     providers: ["groq", "openrouter", "cerebras"] as const,
     providerModels: {
-      groq: "llama-3.1-8b-instant",
+      groq: "openai/gpt-oss-120b",
       openrouter: "meta-llama/llama-3.1-8b-instruct:free",
       cerebras: "llama3.1-8b",
     },
@@ -27,8 +27,8 @@ export const MODEL_MAP = {
   gemini: {
     providers: ["gemini", "openrouter"] as const,
     providerModels: {
-      gemini: "gemini-1.5-flash",
-      openrouter: "google/gemini-flash-1.5",
+      gemini: "gemini-3.6-flash",
+      openrouter: "google/gemini-3.6-flash",
     },
   },
   gpt4: {

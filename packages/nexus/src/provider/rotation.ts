@@ -114,16 +114,15 @@ export const PROVIDER_FALLBACK_ORDER = ["groq", "openrouter", "google", "ollama"
 
 /** Canonical low-cost/free model order used by setup, default selection, and model tests. */
 export const PREFERRED_MODELS = {
-  groq: ["llama-3.1-8b-instant", "mixtral-8x7b-32768", "gemma2-9b-it"],
+  groq: ["openai/gpt-oss-120b", "openai/gpt-oss-20b", "qwen/qwen3.6-27b"],
   openrouter: [
     "meta-llama/llama-3.1-8b-instruct:free",
     "google/gemma-2b-it:free",
     "mistralai/mistral-7b-instruct:free",
     "nousresearch/hermes-3-llama-3.1-405b:free",
   ],
-  // Prefer current text-generation models, while retaining older IDs for providers
-  // whose catalog/API still exposes them. Never use TTS/image/audio models here.
-  google: ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-1.5-pro"],
+  // Use current text-generation models only. Never use TTS/image/audio models here.
+  google: ["gemini-3.6-flash", "gemini-3.5-flash", "gemini-2.5-flash"],
 } as const
 
 export type PreferredProvider = keyof typeof PREFERRED_MODELS

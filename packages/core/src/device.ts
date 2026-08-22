@@ -38,7 +38,7 @@ const LIMITS: Record<DeviceTier, ResourceLimits> = {
     disableBackgroundAgents: false,
     disableWatcher: false,
     compactContext: true,
-    preferredModel: "groq/llama-3.1-8b-instant",
+    preferredModel: "groq/openai/gpt-oss-120b",
   },
   high: {
     maxConcurrency: 4,

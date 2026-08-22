@@ -93,7 +93,7 @@ async function validateKey(provider: KeyProvider, key: string): Promise<boolean>
       const catalog = (await catalogResponse.json().catch(() => ({ data: [] }))) as { data?: Array<{ id?: string }> }
       const ids = (catalog.data ?? []).map((item) => item.id).filter((id): id is string => Boolean(id))
       const preferred = PREFERRED_MODELS[provider]
-      const FALLBACK = { groq: "llama-3.1-8b-instant", openrouter: "openai/gpt-oss-120b:free" } as const
+      const FALLBACK = { groq: "openai/gpt-oss-120b", openrouter: "openai/gpt-oss-120b:free" } as const
       const safeFallback = provider === "groq" || provider === "openrouter" ? FALLBACK[provider] : undefined
       const model =
         preferred.find((id) => ids.includes(id)) ??
