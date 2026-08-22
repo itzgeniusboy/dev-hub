@@ -10,18 +10,36 @@ type RegistryEntry = {
   createdAt: string
 }
 
+export type ToolAgentOptions = {
+  homeDir?: string
+  prefix?: string
+}
+
 export class ToolAgent extends BaseAgent {
   readonly name = "tool-agent"
   readonly systemPrompt = "Prepare a small Termux-compatible script using only the hired tools."
 
+  constructor(private readonly options: ToolAgentOptions = {}) {
+    super()
+  }
+
+  private get homeDir() {
+    return this.options.homeDir ?? homedir()
+  }
+
+  private get shell() {
+    const prefix = this.options.prefix ?? process.env.PREFIX
+    return prefix ? `#!${join(prefix, "bin", "sh")}` : "#!/usr/bin/env sh"
+  }
+
   async execute(task: string, context: AgentContext) {
     const name = task.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "nexus-tool"
-    const outputDir = context.outputDir ?? join(homedir(), ".nexus", "tools", name)
+    const outputDir = context.outputDir ?? join(this.homeDir, ".nexus", "tools", name)
     await mkdir(outputDir, { recursive: true })
 
     // Generated tools follow the documented contract: JSON on stdin, JSON on stdout.
     const runner = [
-      "#!/data/data/com.termux/files/usr/bin/sh",
+      this.shell,
       "set -eu",
       'exec node "$(dirname "$0")/run.js"',
       `# Hired workers: ${context.hiredWorkers.join(", ") || "core team only"}`,
@@ -48,7 +66,7 @@ export class ToolAgent extends BaseAgent {
   }
 
   private async recordRegistry(entry: RegistryEntry) {
-    const registryPath = join(homedir(), ".nexus", "tools", "registry.json")
+    const registryPath = join(this.homeDir, ".nexus", "tools", "registry.json")
     let registry: RegistryEntry[] = []
     try {
       const parsed = JSON.parse(await readFile(registryPath, "utf8")) as unknown
