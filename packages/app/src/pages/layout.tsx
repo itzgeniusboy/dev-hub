@@ -932,6 +932,14 @@ export default function LegacyLayout(props: ParentProps) {
         onSelect: () => connectProvider(),
       },
       {
+        id: "provider.api-key.add",
+        title: "Add API key",
+        description: "Choose a provider and save a local API key",
+        category: language.t("command.category.provider"),
+        suggested: true,
+        onSelect: () => openPaletteApiKeys(),
+      },
+      {
         id: "server.switch",
         title: language.t("command.server.switch"),
         category: language.t("command.category.server"),
@@ -1099,6 +1107,14 @@ export default function LegacyLayout(props: ParentProps) {
     void import("@/components/dialog-connect-provider").then((x) => {
       if (dialogDead || dialogRun !== run) return
       void dialog.show(() => <x.DialogConnectProvider />)
+    })
+  }
+
+  function openPaletteApiKeys() {
+    const run = ++dialogRun
+    void import("@/components/dialog-palette-api-keys").then((x) => {
+      if (dialogDead || dialogRun !== run) return
+      void dialog.show(() => <x.DialogPaletteApiKeys />)
     })
   }
 
