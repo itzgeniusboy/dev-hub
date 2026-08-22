@@ -46,7 +46,7 @@ function replaceManagedBlock(existing: string) {
 
 export async function setupTermuxKeyboard(options: TermuxSetupOptions = {}): Promise<TermuxSetupResult> {
   if (!(options.isTermux ?? isTermuxRuntime())) {
-    return { configured: false, message: "⚠️ Yeh sirf Termux ke liye hai." }
+    return { configured: false, message: "⚠️ This command only runs on Termux." }
   }
 
   const propertiesPath = join(options.homeDir ?? homedir(), ".termux", "termux.properties")
@@ -59,7 +59,13 @@ export async function setupTermuxKeyboard(options: TermuxSetupOptions = {}): Pro
     await access(propertiesPath)
     existing = await readFile(propertiesPath, "utf8")
     backupPath = `${propertiesPath}.backup`
-    await copyFile(propertiesPath, backupPath)
+    try {
+      // Keep the first backup intact so re-runs never replace the user's
+      // original configuration with an already-managed file.
+      await access(backupPath)
+    } catch {
+      await copyFile(propertiesPath, backupPath)
+    }
   } catch {
     // A new properties file needs no backup.
   }

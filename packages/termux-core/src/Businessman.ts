@@ -5,6 +5,7 @@ import { FreelancerDB } from "./FreelancerDB"
 import { BotAgent } from "./agents/BotAgent"
 import { DebugAgent } from "./agents/DebugAgent"
 import { ToolAgent } from "./agents/ToolAgent"
+import { SmartManager } from "./agents/SmartManager"
 import { readPowerStatus, workloadPolicy } from "@nexus-ai/core/power"
 import { ServiceManager } from "./ServiceManager"
 import type { PowerStatus } from "@nexus-ai/core/power"
@@ -25,6 +26,7 @@ export type BusinessmanDependencies = {
   debugAgent?: Pick<DebugAgent, "execute">
   services?: Pick<ServiceManager, "acquireWakeLock" | "releaseWakeLock" | "notify" | "toast">
   readPowerStatus?: () => Promise<PowerStatus>
+  queue?: Pick<SmartManager, "accept" | "update">
 }
 
 export class Businessman {
@@ -36,6 +38,7 @@ export class Businessman {
   private readonly debugAgent: Pick<DebugAgent, "execute">
   private readonly services: Pick<ServiceManager, "acquireWakeLock" | "releaseWakeLock" | "notify" | "toast">
   private readonly powerStatusReader: () => Promise<PowerStatus>
+  private readonly queue: Pick<SmartManager, "accept" | "update">
 
   constructor(dependencies: BusinessmanDependencies = {}) {
     this.staff = dependencies.staff ?? new StaffManager()
@@ -44,12 +47,15 @@ export class Businessman {
     this.debugAgent = dependencies.debugAgent ?? new DebugAgent()
     this.services = dependencies.services ?? new ServiceManager()
     this.powerStatusReader = dependencies.readPowerStatus ?? readPowerStatus
+    this.queue = dependencies.queue ?? new SmartManager()
   }
 
   async handleTask(userCommand: string): Promise<BusinessmanResult> {
     const jobId = `job-${Date.now().toString(36)}`
     const plan = this.staff.brain.analyze(userCommand)
     this.activeJobs.set(jobId, { command: userCommand, startedAt: Date.now() })
+    // Persist the task record before the CLI acknowledges acceptance.
+    await this.queue.accept(jobId, userCommand, process.cwd())
     const power = await this.powerStatusReader()
     const policy = workloadPolicy(power)
     let wakeLockHeld = false
@@ -77,6 +83,14 @@ export class Businessman {
         hired.push({ name: worker, success: result.success, sizeMB: result.sizeMB, alreadyThere: result.alreadyThere })
       }
 
+      const failedHires = hired.filter((worker) => !worker.success && !worker.alreadyThere)
+      if (failedHires.length > 0) {
+        const names = failedHires.map((worker) => worker.name).join(", ")
+        console.error(`❌ Required workers failed to install: ${names}. Task aborted.`)
+        console.error("   Close other package-manager processes or install them manually, then re-run.")
+        throw new Error(`dependency installation failed for: ${names}`)
+      }
+
       console.log("⚒️ Starting task execution...")
       const hiredWorkers = hired.filter((worker) => worker.success).map((worker) => worker.name)
       const context = { hiredWorkers }
@@ -88,6 +102,7 @@ export class Businessman {
         outputDir: (generated as { outputDir?: string }).outputDir,
       })
       const result = { generated, checked }
+      await this.queue.update(jobId, "completed")
       console.log(`✅ Task completed.${(generated as { outputDir?: string }).outputDir ? ` Files: ${(generated as { outputDir: string }).outputDir}` : ""}`)
       void this.services.notify("NEXUS task completed", userCommand.slice(0, 120)).catch(() => undefined)
       void this.services.toast("NEXUS task completed").catch(() => undefined)
@@ -103,6 +118,9 @@ export class Businessman {
 
       return { jobId, plan, hired, result, keepTeam, savedMB }
     } catch (error) {
+      await this.queue
+        .update(jobId, "failed", error instanceof Error ? error.message : String(error))
+        .catch(() => undefined)
       console.error("❌ Task failed. NEXUS will release temporary mobile resources.")
       void this.services.notify("NEXUS task failed", userCommand.slice(0, 120)).catch(() => undefined)
       void this.services.toast("NEXUS task failed").catch(() => undefined)

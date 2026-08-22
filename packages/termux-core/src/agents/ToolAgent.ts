@@ -1,18 +1,82 @@
-import { mkdir, writeFile } from "node:fs/promises"
+import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { homedir } from "node:os"
-import { join } from "node:path"
+import { dirname, join } from "node:path"
 import { BaseAgent, type AgentContext } from "./BaseAgent"
+
+type RegistryEntry = {
+  name: string
+  path: string
+  runtime: string
+  createdAt: string
+}
+
+export type ToolAgentOptions = {
+  homeDir?: string
+  prefix?: string
+}
 
 export class ToolAgent extends BaseAgent {
   readonly name = "tool-agent"
   readonly systemPrompt = "Prepare a small Termux-compatible script using only the hired tools."
 
+  constructor(private readonly options: ToolAgentOptions = {}) {
+    super()
+  }
+
+  private get homeDir() {
+    return this.options.homeDir ?? homedir()
+  }
+
+  private get shell() {
+    const prefix = this.options.prefix ?? process.env.PREFIX
+    return prefix ? `#!${join(prefix, "bin", "sh")}` : "#!/usr/bin/env sh"
+  }
+
   async execute(task: string, context: AgentContext) {
     const name = task.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 48) || "nexus-tool"
-    const outputDir = context.outputDir ?? join(homedir(), ".nexus", "tools", name)
+    const outputDir = context.outputDir ?? join(this.homeDir, ".nexus", "tools", name)
     await mkdir(outputDir, { recursive: true })
-    const script = `#!/data/data/com.termux/files/usr/bin/sh\nset -eu\nprintf '%s\\n' ${JSON.stringify(`NEXUS task: ${task}`)}\n# Hired workers: ${context.hiredWorkers.join(", ") || "core team only"}\n`
-    await writeFile(join(outputDir, "run.sh"), script, { encoding: "utf8", mode: 0o755 })
-    return { outputDir, name, files: ["run.sh"] }
+
+    // Generated tools follow the documented contract: JSON on stdin, JSON on stdout.
+    const runner = [
+      this.shell,
+      "set -eu",
+      'exec node "$(dirname "$0")/run.js"',
+      `# Hired workers: ${context.hiredWorkers.join(", ") || "core team only"}`,
+      "",
+    ].join("\n")
+    await writeFile(join(outputDir, "run.sh"), runner, { encoding: "utf8", mode: 0o755 })
+
+    const toolScript = [
+      "#!/usr/bin/env node",
+      'let raw = ""',
+      'process.stdin.on("data", (chunk) => (raw += chunk))',
+      'process.stdin.on("end", () => {',
+      "  let input = {}",
+      '  try { input = JSON.parse(raw || "{}") } catch { input = {} }',
+      "  process.stdout.write(",
+      "    JSON.stringify({ ok: true, tool: " + JSON.stringify(name) + ", task: " + JSON.stringify(task) + ", input }) + \"\\n\",",
+      "  )",
+      "})",
+      "",
+    ].join("\n")
+    await writeFile(join(outputDir, "run.js"), toolScript, { encoding: "utf8", mode: 0o755 })
+    await this.recordRegistry({ name, path: outputDir, runtime: "node", createdAt: new Date().toISOString() })
+    return { outputDir, name, files: ["run.sh", "run.js"] }
+  }
+
+  private async recordRegistry(entry: RegistryEntry) {
+    const registryPath = join(this.homeDir, ".nexus", "tools", "registry.json")
+    let registry: RegistryEntry[] = []
+    try {
+      const parsed = JSON.parse(await readFile(registryPath, "utf8")) as unknown
+      if (Array.isArray(parsed)) registry = parsed as RegistryEntry[]
+    } catch {
+      // First entry starts a fresh registry.
+    }
+    const deduped = registry.filter((item) => item.path !== entry.path)
+    deduped.push(entry)
+    await mkdir(dirname(registryPath), { recursive: true })
+    await writeFile(registryPath, JSON.stringify(deduped, null, 2) + "\n", "utf8")
   }
 }
