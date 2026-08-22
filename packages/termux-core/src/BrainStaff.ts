@@ -44,7 +44,7 @@ export class BrainStaff {
     const estimatedSeconds = Math.max(5, workersNeeded.length * 10)
 
     if (workersNeeded.length === 0) {
-      console.log("🤔 Samajh nahi aaya. Kya chahiye?")
+      console.log("🤔 Could not classify this task. What would you like to automate?")
       console.log("Options: bot, download, network, scrape, image, system")
     }
 

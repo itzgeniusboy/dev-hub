@@ -89,7 +89,7 @@ export class HireStaff {
 
   async cleanCache(): Promise<void> {
     if (process.env.NEXUS_BUSINESSMAN_DRY_RUN === "1") {
-      console.log("🧹 Cache saaf... ✅ [dry run]")
+      console.log("🧹 Cache cleaned... ✅ [dry run]")
       return
     }
     const commands = [
