@@ -9,7 +9,7 @@ export const LiaisonCommand = cmd({
     const { UserLiaison } = await import("@nexus/termux-core")
     const message = args.message.join(" ").trim()
     if (!message) {
-      process.stdout.write("Bolo bhai! Message ya task bhejo.\n")
+      process.stdout.write("Send a message or task for NEXUS to handle.\n")
       return
     }
     const liaison = new UserLiaison({ onUpdate: (status) => {
