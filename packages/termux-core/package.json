@@ -6,6 +6,9 @@
   "devDependencies": {
     "@types/node": "catalog:"
   },
+  "dependencies": {
+    "@nexus-ai/core": "workspace:*"
+  },
   "main": "dist/index.js",
   "exports": {
     ".": "./src/index.ts"

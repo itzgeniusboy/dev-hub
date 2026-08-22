@@ -75,6 +75,42 @@ if [[ "${PREFIX:-}" == */com.termux/files/usr ]] || [[ "${TERMUX_VERSION:-}" != 
     is_termux=true
 fi
 
+install_termux_foundation() {
+    if [ "$is_termux" != "true" ]; then
+        return 0
+    fi
+
+    if ! command -v pkg >/dev/null 2>&1; then
+        echo -e "${RED}Error: Termux's 'pkg' command was not found.${NC}"
+        echo -e "${MUTED}Run this installer inside the native Termux app, not inside a PRoot container.${NC}"
+        exit 1
+    fi
+
+    echo -e "${MUTED}Preparing the no-root Termux foundation...${NC}"
+    # Release archives contain a compiled NEXUS executable. Bun is only required
+    # for source development builds, so the production installer must not install
+    # or execute it. Node is retained for executable Node tool templates.
+    if ! command -v node >/dev/null 2>&1; then
+        if ! pkg install -y nodejs-lts && ! pkg install -y nodejs; then
+            echo -e "${RED}Unable to install Node.js in Termux.${NC}"
+            echo -e "${MUTED}Run: pkg install nodejs${NC}"
+            exit 1
+        fi
+    fi
+
+    if ! command -v curl >/dev/null 2>&1 || ! command -v tar >/dev/null 2>&1; then
+        if ! pkg install -y ca-certificates curl tar; then
+            echo -e "${RED}Unable to install required Termux download tools.${NC}"
+            echo -e "${MUTED}Run: pkg install ca-certificates curl tar${NC}"
+            exit 1
+        fi
+    fi
+
+    mkdir -p "$HOME/.nexus/bots" "$HOME/.nexus/tools" "$HOME/.nexus/services" "$HOME/.nexus/logs" "$HOME/.nexus/agents"
+}
+
+install_termux_foundation
+
 # If --binary is provided, skip all download/detection logic.
 if [ -n "$binary_path" ]; then
     if [ ! -f "$binary_path" ]; then

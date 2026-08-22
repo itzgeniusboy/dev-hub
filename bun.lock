@@ -946,6 +946,9 @@
     "packages/termux-core": {
       "name": "@nexus/termux-core",
       "version": "1.0.0",
+      "dependencies": {
+        "@nexus-ai/core": "workspace:*",
+      },
       "devDependencies": {
         "@types/node": "catalog:",
       },

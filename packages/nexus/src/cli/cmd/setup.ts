@@ -7,6 +7,43 @@ import { Process } from "@/util/process"
 import { readNexusConfig, writeNexusConfig } from "./config"
 import { PREFERRED_MODELS } from "@/provider/rotation"
 import { setupTermuxKeyboard } from "@nexus/termux-core"
+import { arm64RecommendedModel } from "@nexus-ai/core/power"
+import { largeDownloadWarning } from "@nexus-ai/core/network"
+import { detectRuntimeEnvironment, type RuntimeEnvironment } from "@nexus-ai/core/platform"
+import { createInterface } from "node:readline/promises"
+import { stdin as setupInput, stdout as setupOutput } from "node:process"
+
+async function confirmLargeDownload(message: string) {
+  if (!setupInput.isTTY || !setupOutput.isTTY) {
+    console.error(`${message} Re-run interactively to confirm.`)
+    return false
+  }
+  const readline = createInterface({ input: setupInput, output: setupOutput })
+  try {
+    return (await readline.question(`${message} Continue? (y/N) `)).trim().toLowerCase().startsWith("y")
+  } finally {
+    readline.close()
+  }
+}
+
+export type OllamaInstallPlan = { command?: string[]; message: string }
+
+export const ollamaInstallPlan = (environment: RuntimeEnvironment): OllamaInstallPlan => {
+  switch (environment) {
+    case "termux":
+      return { command: ["pkg", "install", "-y", "ollama"], message: "Installing Ollama with the native Termux package manager..." }
+    case "macos":
+      return { command: ["brew", "install", "ollama"], message: "Installing Ollama with Homebrew..." }
+    case "windows":
+      return { command: ["winget", "install", "Ollama.Ollama"], message: "Installing Ollama with winget..." }
+    case "linux":
+    case "wsl":
+    case "proot":
+    case "andronix":
+    case "userland":
+      return { message: "Ollama is not installed. Install it using your distribution's supported method, then rerun `nexus setup ollama`. NEXUS does not execute remote installer scripts automatically." }
+  }
+}
 
 function freeModelDefinitions(provider: keyof typeof PREFERRED_MODELS) {
   return Object.fromEntries(
@@ -156,30 +193,42 @@ function appendUnique(existing: string[] | undefined, value: string): string[] {
 
 export const SetupOllamaCommand = effectCmd({
   command: "ollama",
-  describe: "Auto-install Ollama + pull llama3",
+  describe: "Install or configure Ollama, then pull a local model",
   instance: false,
   handler: Effect.fn("Cli.setup.ollama")(function* () {
     UI.empty()
     yield* Prompt.intro("Installing Ollama")
 
-    yield* Prompt.log.info("Installing Ollama via Termux package manager...")
-    const installProc = Process.spawn(["pkg", "install", "-y", "ollama"], { stdio: "inherit" })
-    const installCode = yield* Effect.tryPromise(() => installProc.exited)
-    if (installCode !== 0) {
-      return yield* fail("Ollama could not be installed with pkg. Install it manually, then run `nexus setup ollama` again.")
+    const environment = detectRuntimeEnvironment()
+    const existingProc = Process.spawn(["ollama", "--version"], { stdio: "ignore" })
+    const available = (yield* Effect.tryPromise(() => existingProc.exited).pipe(Effect.orElseSucceed(() => -1))) === 0
+    if (!available) {
+      const plan = ollamaInstallPlan(environment)
+      if (!plan.command) return yield* fail(plan.message)
+      yield* Prompt.log.info(plan.message)
+      const installProc = Process.spawn(plan.command, { stdio: "inherit" })
+      const installCode = yield* Effect.tryPromise(() => installProc.exited)
+      if (installCode !== 0) {
+        return yield* fail(`Ollama could not be installed. ${plan.message} If the package manager is unavailable, install Ollama manually and rerun this command.`)
+      }
     }
 
     yield* Prompt.log.info("Starting Ollama service...")
     const serveProc = Process.spawn(["ollama", "serve"], { stdio: "ignore" })
     void serveProc.exited
 
-    yield* Prompt.log.info("Pulling llama3 (4GB, ~10 mins on WiFi)...")
-    const pullProc = Process.spawn(["ollama", "pull", "llama3"], { stdio: "inherit" })
+    const model = arm64RecommendedModel() ?? "llama3"
+    const warning = yield* Effect.tryPromise(() => largeDownloadWarning(4 * 1024 * 1024 * 1024))
+    if (warning && !(yield* Effect.tryPromise(() => confirmLargeDownload(warning)))) {
+      return yield* fail("Model download cancelled. Connect to Wi-Fi or confirm the download interactively, then run `nexus setup ollama` again.")
+    }
+    yield* Prompt.log.info(`Pulling ${model} (up to 4GB, ~10 mins on WiFi)...`)
+    const pullProc = Process.spawn(["ollama", "pull", model], { stdio: "inherit" })
     const pullCode = yield* Effect.tryPromise(() => pullProc.exited)
     if (pullCode !== 0) return yield* fail("Ollama installed, but llama3 could not be pulled.")
 
     const { path: configPath, data: cfg } = readNexusConfig()
-    cfg.model = "ollama/llama3"
+    cfg.model = `ollama/${model}`
     cfg.provider = {
         ...(cfg.provider ?? {}),
         ollama: {
@@ -188,8 +237,8 @@ export const SetupOllamaCommand = effectCmd({
           npm: "@ai-sdk/openai-compatible",
           env: [],
           models: {
-            llama3: {
-              id: "llama3",
+            [model]: {
+              id: model,
               name: "Llama 3 (local)",
               reasoning: false,
               tool_call: true,

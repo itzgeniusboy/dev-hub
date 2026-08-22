@@ -5,6 +5,9 @@ import { FreelancerDB } from "./FreelancerDB"
 import { BotAgent } from "./agents/BotAgent"
 import { DebugAgent } from "./agents/DebugAgent"
 import { ToolAgent } from "./agents/ToolAgent"
+import { readPowerStatus, workloadPolicy } from "@nexus-ai/core/power"
+import { ServiceManager } from "./ServiceManager"
+import type { PowerStatus } from "@nexus-ai/core/power"
 
 export type BusinessmanResult = {
   jobId: string
@@ -15,31 +18,66 @@ export type BusinessmanResult = {
   savedMB: number
 }
 
+export type BusinessmanDependencies = {
+  staff?: StaffManager
+  botAgent?: Pick<BotAgent, "execute">
+  toolAgent?: Pick<ToolAgent, "execute">
+  debugAgent?: Pick<DebugAgent, "execute">
+  services?: Pick<ServiceManager, "acquireWakeLock" | "releaseWakeLock" | "notify" | "toast">
+  readPowerStatus?: () => Promise<PowerStatus>
+}
+
 export class Businessman {
-  readonly staff = new StaffManager()
+  readonly staff: StaffManager
   readonly freelancers = new FreelancerDB()
   readonly activeJobs = new Map<string, { command: string; startedAt: number }>()
-  private readonly botAgent = new BotAgent()
-  private readonly toolAgent = new ToolAgent()
-  private readonly debugAgent = new DebugAgent()
+  private readonly botAgent: Pick<BotAgent, "execute">
+  private readonly toolAgent: Pick<ToolAgent, "execute">
+  private readonly debugAgent: Pick<DebugAgent, "execute">
+  private readonly services: Pick<ServiceManager, "acquireWakeLock" | "releaseWakeLock" | "notify" | "toast">
+  private readonly powerStatusReader: () => Promise<PowerStatus>
+
+  constructor(dependencies: BusinessmanDependencies = {}) {
+    this.staff = dependencies.staff ?? new StaffManager()
+    this.botAgent = dependencies.botAgent ?? new BotAgent()
+    this.toolAgent = dependencies.toolAgent ?? new ToolAgent()
+    this.debugAgent = dependencies.debugAgent ?? new DebugAgent()
+    this.services = dependencies.services ?? new ServiceManager()
+    this.powerStatusReader = dependencies.readPowerStatus ?? readPowerStatus
+  }
 
   async handleTask(userCommand: string): Promise<BusinessmanResult> {
     const jobId = `job-${Date.now().toString(36)}`
     const plan = this.staff.brain.analyze(userCommand)
     this.activeJobs.set(jobId, { command: userCommand, startedAt: Date.now() })
+    const power = await this.powerStatusReader()
+    const policy = workloadPolicy(power)
+    let wakeLockHeld = false
 
-    console.log("🧠 Brain: Task samajh gaya")
-    console.log(`   Chahiye: ${plan.workersNeeded.join(" + ") || "core team only"}`)
+    console.log("🧠 Task analyzed successfully")
+    console.log(`   Required: ${plan.workersNeeded.join(" + ") || "core team only"}`)
     console.log(`   Estimate: ${plan.estimatedSize} download, ~${plan.estimatedTime}`)
+    if (policy.throttled) {
+      console.warn(`⚠️ Mobile resource protection enabled: ${policy.reason}. Limiting this task to ${policy.maxConcurrency ?? 1} worker.`)
+      if (policy.preferredModel) console.warn(`   Recommended lightweight local model: ${policy.preferredModel}`)
+    }
+    try {
+      await this.services.acquireWakeLock()
+      wakeLockHeld = true
+    } catch {
+      // Native Termux is optional; desktop and unsupported Android environments retain existing behavior.
+    }
 
     const hired: Array<{ name: string; success: boolean; sizeMB: number; alreadyThere?: boolean }> = []
     try {
-      for (const worker of this.staff.brain.matchFreelancers(plan)) {
+      const matchedWorkers = this.staff.brain.matchFreelancers(plan)
+      const selectedWorkers = policy.maxConcurrency ? matchedWorkers.slice(0, policy.maxConcurrency) : matchedWorkers
+      for (const worker of selectedWorkers) {
         const result = await this.staff.hire.hire(worker)
         hired.push({ name: worker, success: result.success, sizeMB: result.sizeMB, alreadyThere: result.alreadyThere })
       }
 
-      console.log("⚒️ Kaam shuru...")
+      console.log("⚒️ Starting task execution...")
       const hiredWorkers = hired.filter((worker) => worker.success).map((worker) => worker.name)
       const context = { hiredWorkers }
       const generated = plan.taskType === "bot"
@@ -50,19 +88,27 @@ export class Businessman {
         outputDir: (generated as { outputDir?: string }).outputDir,
       })
       const result = { generated, checked }
-      console.log(`✅ Kaam khatm!${(generated as { outputDir?: string }).outputDir ? ` Files: ${(generated as { outputDir: string }).outputDir}` : ""}`)
+      console.log(`✅ Task completed.${(generated as { outputDir?: string }).outputDir ? ` Files: ${(generated as { outputDir: string }).outputDir}` : ""}`)
+      void this.services.notify("NEXUS task completed", userCommand.slice(0, 120)).catch(() => undefined)
+      void this.services.toast("NEXUS task completed").catch(() => undefined)
 
-      const keepTeam = hired.length > 0 ? await this.askUser("💾 Freelancers ko rakhein? (y/n): ") : true
+      const keepTeam = hired.length > 0 ? await this.askUser("💾 Keep hired workers available? (y/n): ") : true
       let savedMB = 0
       if (!keepTeam && hired.length > 0) {
         savedMB = await this.staff.fire.fireMany(hired)
-        console.log(`📊 Total bachaya: ${savedMB}MB`)
+        console.log(`📊 Storage reclaimed: ${savedMB}MB`)
       } else if (keepTeam && hired.length > 0) {
         console.log(`💼 Kept on payroll: ${hired.map((worker) => worker.name).join(", ")}`)
       }
 
       return { jobId, plan, hired, result, keepTeam, savedMB }
+    } catch (error) {
+      console.error("❌ Task failed. NEXUS will release temporary mobile resources.")
+      void this.services.notify("NEXUS task failed", userCommand.slice(0, 120)).catch(() => undefined)
+      void this.services.toast("NEXUS task failed").catch(() => undefined)
+      throw error
     } finally {
+      if (wakeLockHeld) void this.services.releaseWakeLock().catch(() => undefined)
       this.activeJobs.delete(jobId)
     }
   }
