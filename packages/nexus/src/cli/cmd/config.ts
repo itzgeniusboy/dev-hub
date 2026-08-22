@@ -2,7 +2,7 @@ import fs from "node:fs"
 import path from "node:path"
 import { cmd } from "./cmd"
 import { UI } from "../ui"
-import { normalizeProviderKeyName, redactSecret } from "@/provider/rotation"
+import { normalizeProviderKeyName, redactSecret, PREFERRED_MODELS } from "@/provider/rotation"
 
 type ConfigRecord = Record<string, any>
 
@@ -113,14 +113,40 @@ function parseAssignment(input: unknown): { key: string; value: string } | undef
   return { key, value }
 }
 
-function providerDefinition(providerID: string): Record<string, string> | undefined {
-  const definitions: Record<string, Record<string, string>> = {
-    groq: { name: "Groq", api: "https://api.groq.com/openai/v1", npm: "@ai-sdk/openai-compatible" },
-    openrouter: { name: "OpenRouter", api: "https://openrouter.ai/api/v1", npm: "@ai-sdk/openai-compatible" },
+function providerModels(providerID: keyof typeof PREFERRED_MODELS): Record<string, Record<string, unknown>> {
+  return Object.fromEntries(
+    PREFERRED_MODELS[providerID].map((id) => [
+      id,
+      {
+        id,
+        name: id,
+        reasoning: false,
+        tool_call: true,
+        modalities: { input: ["text"], output: ["text"] },
+      },
+    ]),
+  )
+}
+
+function providerDefinition(providerID: string): Record<string, unknown> | undefined {
+  const definitions: Record<string, Record<string, unknown>> = {
+    groq: {
+      name: "Groq",
+      api: "https://api.groq.com/openai/v1",
+      npm: "@ai-sdk/groq",
+      models: providerModels("groq"),
+    },
+    openrouter: {
+      name: "OpenRouter",
+      api: "https://openrouter.ai/api/v1",
+      npm: "@openrouter/ai-sdk-provider",
+      models: providerModels("openrouter"),
+    },
     google: {
       name: "Gemini",
-      api: "https://generativelanguage.googleapis.com/v1beta/openai",
-      npm: "@ai-sdk/openai-compatible",
+      api: "https://generativelanguage.googleapis.com/v1beta",
+      npm: "@ai-sdk/google",
+      models: providerModels("google"),
     },
     openai: { name: "OpenAI", api: "https://api.openai.com/v1", npm: "@ai-sdk/openai-compatible" },
   }

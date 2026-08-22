@@ -1977,13 +1977,17 @@ const layer = Layer.effect(
         return yield* new ModelNotFoundError({ providerID, modelID, suggestions })
       }
 
-      const info = provider.models[modelID]
+      // Accept both the API shape (`providerID` + bare `modelID`) and the
+      // common CLI shape where the provider prefix is accidentally retained
+      // in modelID. This keeps `provider/model` stable across CLI/server hops.
+      const normalizedModelID = modelID.startsWith(`${providerID}/`) ? modelID.slice(providerID.length + 1) : modelID
+      const info = provider.models[normalizedModelID]
       if (!info) {
-        const current = modelSuggestions(provider, modelID, runtimeFlags.enableExperimentalModels)
+        const current = modelSuggestions(provider, normalizedModelID, runtimeFlags.enableExperimentalModels)
         const suggestions = current.length
           ? current
-          : modelSuggestions(s.catalog[providerID], modelID, runtimeFlags.enableExperimentalModels)
-        return yield* new ModelNotFoundError({ providerID, modelID, suggestions })
+          : modelSuggestions(s.catalog[providerID], normalizedModelID, runtimeFlags.enableExperimentalModels)
+        return yield* new ModelNotFoundError({ providerID, modelID: normalizedModelID, suggestions })
       }
       return info
     })

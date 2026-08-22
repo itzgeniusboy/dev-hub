@@ -283,7 +283,7 @@ export const RunCommand = effectCmd({
     const { RuntimeFlags } = yield* Effect.promise(() => import("@/effect/runtime-flags"))
     const { InstanceRef } = yield* Effect.promise(() => import("@/effect/instance-ref"))
     const { ServerAuth } = yield* Effect.promise(() => import("@/server/auth"))
-    const { Config } = yield* Effect.promise(() => import("@nexus-ai/core/config"))
+    const { Config } = yield* Effect.promise(() => import("@/config/config"))
     const agentSvc = yield* Agent.Service
     const flags = yield* RuntimeFlags.Service
     const localInstance = yield* InstanceRef
