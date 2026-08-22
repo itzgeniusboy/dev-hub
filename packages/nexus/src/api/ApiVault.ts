@@ -171,12 +171,30 @@ export function removeApiKey(providerInput: string, index: number): ApiKeyEntry 
   return removed
 }
 
+function invalidateCachedVaultStatus(): void {
+  cachedVaultStatus = null
+  lastVaultCacheTime = 0
+}
+
 export function updateApiKeyStatus(providerInput: string, key: string, status: ApiKeyStatus, error?: unknown): void {
   const provider = normalizeProvider(providerInput)
   if (!provider) return
   const vault = loadApiVault()
   const entry = (vault.providers[provider] ?? []).find((candidate) => candidate.key === key)
-  if (!entry) return
+  if (!entry) {
+    const previous = cachedConfiguredStatus[key]
+    const failures = status === "active" ? 0 : (previous?.failures ?? 0) + 1
+    cachedConfiguredStatus[key] = {
+      key,
+      label: previous?.label ?? "config",
+      added: previous?.added ?? new Date().toISOString().slice(0, 10),
+      status: failures >= 3 && status !== "active" ? "suspended" : status,
+      failures,
+      lastChecked: new Date().toISOString(),
+      ...(failures >= 3 && status !== "active" ? { suspendedUntil: new Date(Date.now() + 60 * 60 * 1000).toISOString() } : {}),
+    }
+    return
+  }
   entry.status = status
   entry.lastChecked = new Date().toISOString()
   if (status === "active") {
@@ -191,6 +209,7 @@ export function updateApiKeyStatus(providerInput: string, key: string, status: A
   }
   void error
   saveApiVault(vault)
+  invalidateCachedVaultStatus()
 }
 
 export function recordApiUsage(providerInput: string, inputTokens: number, outputTokens: number): void {
@@ -287,6 +306,7 @@ export async function checkKey(providerInput: string, key: string): Promise<{ st
 }
 
 let cachedVaultStatus: Record<string, ApiKeyEntry> | null = null
+let cachedConfiguredStatus: Record<string, ApiKeyEntry> = {}
 let lastVaultCacheTime = 0
 
 export function getCachedKeyStatus(key: string): ApiKeyEntry | undefined {
@@ -302,15 +322,16 @@ export function getCachedKeyStatus(key: string): ApiKeyEntry | undefined {
     cachedVaultStatus = map
     lastVaultCacheTime = now
   }
-  return cachedVaultStatus[key]
+  return cachedVaultStatus[key] ?? cachedConfiguredStatus[key]
 }
 
 let verificationInProgress = false
-export async function verifyAllVaultKeys(): Promise<void> {
+export async function verifyAllVaultKeys(configured: Record<string, string[]> = {}): Promise<void> {
   if (verificationInProgress) return
   verificationInProgress = true
   try {
     const vault = loadApiVault()
+    const vaultKeys = new Set(apiVaultKeyEntries().map(({ entry }) => entry.key))
     const tasks: Promise<void>[] = []
     for (const [prov, entries] of Object.entries(vault.providers)) {
       for (const entry of entries) {
@@ -322,6 +343,24 @@ export async function verifyAllVaultKeys(): Promise<void> {
         tasks.push((async () => {
           const { status } = await checkKey(prov, entry.key)
           if (status !== "unknown") updateApiKeyStatus(prov, entry.key, status)
+        })())
+      }
+    }
+    for (const [prov, keys] of Object.entries(configured)) {
+      for (const key of keys) {
+        if (typeof key !== "string" || !key.trim() || vaultKeys.has(key)) continue
+        tasks.push((async () => {
+          const { status } = await checkKey(prov, key)
+          if (status !== "unknown") {
+            cachedConfiguredStatus[key] = {
+              key,
+              label: "config",
+              added: new Date().toISOString().slice(0, 10),
+              status,
+              failures: 0,
+              lastChecked: new Date().toISOString(),
+            }
+          }
         })())
       }
     }
@@ -337,6 +376,7 @@ export function resetApiVaultForTests(): void {
   const usage = apiUsagePath()
   if (fs.existsSync(usage)) fs.unlinkSync(usage)
   cachedVaultStatus = null
+  cachedConfiguredStatus = {}
   lastVaultCacheTime = 0
 }
 

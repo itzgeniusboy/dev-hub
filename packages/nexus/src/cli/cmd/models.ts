@@ -8,7 +8,45 @@ import { ProviderV2 } from "@nexus-ai/core/provider"
 import { cmd } from "./cmd"
 import * as Prompt from "../effect/prompt"
 import { Config } from "@/config/config"
-import { modelForProvider } from "@/provider/rotation"
+import { isTextGenerationCandidate, modelForProvider } from "@/provider/rotation"
+
+function failureSummary(error: unknown): string {
+  const message = String(error)
+  if (/getaddrinfo|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|timeout|network|transport/i.test(message)) return "Network/DNS unavailable"
+  if (/401|403|unauthorized|forbidden|invalid.*(?:api.?key|credential)|api.?key.*(?:not valid|invalid)|authentication/i.test(message)) return "Authentication failed"
+  if (/429|rate.?limit|too many requests|quota exceeded|freeusagelimit/i.test(message)) return "Rate limited/quota exhausted"
+  if (/404|model.*(?:not found|does not exist)|not found.*model|unsupported model/i.test(message)) return "Model unavailable"
+  if (/5\d\d|server error|service unavailable/i.test(message)) return "Provider server error"
+  return "Request failed"
+}
+
+function normalizeConfiguredProvider(providerID: string): string {
+  return providerID.toLowerCase() === "gemini" ? "google" : providerID.toLowerCase()
+}
+
+function configuredModelIDs(cfg: Record<string, any>, providerID: string): string[] {
+  const normalized = normalizeConfiguredProvider(providerID)
+  const providerConfig = cfg.provider?.[providerID] ?? cfg.provider?.[normalized] ?? (normalized === "google" ? cfg.provider?.gemini : undefined)
+  const models = providerConfig?.models
+  if (!models || typeof models !== "object" || Array.isArray(models)) return []
+  return Object.keys(models)
+    .map((id) => id.includes("/") && id.split("/")[0] === normalized ? id.slice(normalized.length + 1) : id)
+    .filter((id) => id.length > 0)
+}
+
+function configuredModelTarget(cfg: Record<string, any>): Array<{ providerID: string; modelID: string }> {
+  const targets: Array<{ providerID: string; modelID: string }> = []
+  for (const providerID of Object.keys(cfg.provider ?? {})) {
+    for (const modelID of configuredModelIDs(cfg, providerID)) {
+      targets.push({ providerID: normalizeConfiguredProvider(providerID), modelID })
+    }
+  }
+  if (typeof cfg.model === "string" && cfg.model.includes("/")) {
+    const [providerID, ...parts] = cfg.model.split("/")
+    if (parts.length > 0) targets.unshift({ providerID: normalizeConfiguredProvider(providerID), modelID: parts.join("/") })
+  }
+  return targets
+}
 
 export const ModelsListCommand = effectCmd({
   command: "list [provider]",
@@ -86,12 +124,13 @@ export const ModelsTestCommand = effectCmd({
     yield* Prompt.intro("Testing configured models")
 
     const configured = Object.keys(cfg.provider ?? {})
-    if (configured.length === 0) {
-      yield* Prompt.log.warn("No custom providers configured.")
+    const configuredTargets = configuredModelTarget(cfg)
+    if (configured.length === 0 && configuredTargets.length === 0) {
+      yield* Prompt.log.warn("No custom providers or models configured.")
     }
 
     const testPrompt = "Reply with exactly OK"
-    const providersToTest = ["groq", "openrouter", "google", "ollama", "openai", "opencode", ...configured]
+    const providersToTest = Array.from(new Set(["groq", "openrouter", "google", "ollama", "openai", "opencode", ...configured, ...configuredTargets.map((item) => item.providerID)]))
     const tested = new Set<string>()
 
     for (const pid of providersToTest) {
@@ -100,53 +139,65 @@ export const ModelsTestCommand = effectCmd({
 
       const provider = yield* s.getProvider(ProviderV2.ID.make(pid))
       if (!provider) continue
+      // Do not issue requests for cloud providers that have no configured key.
+      // Ollama is local and is the sole intentional exception.
+      if (
+        pid !== "ollama" &&
+        (yield* s.rotationKeyCount(ProviderV2.ID.make(pid))) === 0 &&
+        !provider.key
+      ) continue
 
+      const configuredIDs = configuredModelIDs(cfg, pid)
+      const targets = configuredIDs.length > 0
+        ? configuredIDs.map((modelID) => provider.models[modelID]).filter((item): item is NonNullable<typeof item> => Boolean(item))
+        : []
       const preferredID = modelForProvider(pid, provider.models)
-      const model = preferredID ? provider.models[preferredID] : Provider.sort(Object.values(provider.models))[0]
-      if (!model) continue
-      const label = `${pid}/${model.id}`
-      const spinner = Prompt.spinner()
-      yield* spinner.start(`Testing ${label}...`)
+      const fallbackModel = preferredID
+        ? provider.models[preferredID]
+        : Provider.sort(Object.values(provider.models).filter((item) => isTextGenerationCandidate(pid, item.id, item)))[0]
+      const models = targets.length > 0 ? targets : fallbackModel ? [fallbackModel] : []
+      for (const model of models) {
+        if (!isTextGenerationCandidate(pid, model.id, model)) continue
+        const modelKey = `${pid}/${model.id}`
+        if (tested.has(modelKey)) continue
+        tested.add(modelKey)
+        const label = modelKey
+        const spinner = Prompt.spinner()
+        yield* spinner.start(`Testing ${label}...`)
 
-      const language = yield* s.getLanguage(model).pipe(Effect.exit)
-      if (Exit.isFailure(language)) {
-        const errStr = String(language.cause)
-        if (/rate.?limit|quota exceeded/i.test(errStr)) {
-          yield* spinner.stop(UI.Style.TEXT_WARNING_BOLD + "! " + UI.Style.TEXT_NORMAL + label + " (Rate limited)")
-        } else {
+        const language = yield* s.getLanguage(model).pipe(Effect.exit)
+        if (Exit.isFailure(language)) {
+          const errStr = String(language.cause)
+          const summary = failureSummary(errStr)
           yield* spinner.stop(
-            UI.Style.TEXT_DANGER_BOLD +
-              "✗ " +
+            (summary === "Rate limited/quota exhausted" ? UI.Style.TEXT_WARNING_BOLD + "! " : UI.Style.TEXT_DANGER_BOLD + "✗ ") +
               UI.Style.TEXT_NORMAL +
               label +
-              " (Failed)" +
+              ` (${summary})` +
               (process.env.NEXUS_DEBUG_API === "1" ? ` ${errStr}` : ""),
           )
+          continue
         }
-        continue
-      }
 
-      const result = yield* Effect.tryPromise({
-        try: () => language.value.doGenerate({
-          inputFormat: "prompt",
-          mode: { type: "regular" },
-          prompt: [{ role: "user", content: [{ type: "text", text: testPrompt }] }],
-        }),
-        catch: (e) => e,
-      }).pipe(Effect.exit)
-      if (Exit.isSuccess(result)) {
-        yield* spinner.stop(UI.Style.TEXT_SUCCESS_BOLD + "✓ " + UI.Style.TEXT_NORMAL + label + " (Working)")
-      } else {
-        const errStr = String(result.cause)
-        if (/rate.?limit|quota exceeded/i.test(errStr)) {
-          yield* spinner.stop(UI.Style.TEXT_WARNING_BOLD + "! " + UI.Style.TEXT_NORMAL + label + " (Rate limited)")
+        const result = yield* Effect.tryPromise({
+          try: () =>
+            language.value.doGenerate({
+              inputFormat: "prompt",
+              mode: { type: "regular" },
+              prompt: [{ role: "user", content: [{ type: "text", text: testPrompt }] }],
+            }),
+          catch: (e) => e,
+        }).pipe(Effect.exit)
+        if (Exit.isSuccess(result)) {
+          yield* spinner.stop(UI.Style.TEXT_SUCCESS_BOLD + "✓ " + UI.Style.TEXT_NORMAL + label + " (Working)")
         } else {
+          const errStr = String(result.cause)
+          const summary = failureSummary(errStr)
           yield* spinner.stop(
-            UI.Style.TEXT_DANGER_BOLD +
-              "✗ " +
+            (summary === "Rate limited/quota exhausted" ? UI.Style.TEXT_WARNING_BOLD + "! " : UI.Style.TEXT_DANGER_BOLD + "✗ ") +
               UI.Style.TEXT_NORMAL +
               label +
-              " (Failed)" +
+              ` (${summary})` +
               (process.env.NEXUS_DEBUG_API === "1" ? ` ${errStr}` : ""),
           )
         }

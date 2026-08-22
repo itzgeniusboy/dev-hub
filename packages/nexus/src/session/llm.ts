@@ -421,9 +421,13 @@ const live: Layer.Layer<
                   if (!RotationEngine.isFallbackable(message)) return undefined
                   
                   return Effect.gen(function* () {
-                    const status = RotationEngine.isRateLimited(message) ? "rate_limited" : "invalid"
+                    const rateLimited = RotationEngine.isRateLimited(message)
+                    const credentialFailure = /invalid[_ -]?api[_ -]?key|api[_ -]?key.*(?:invalid|not valid)|(?:invalid|missing).*(?:authentication|credentials)|unauthorized|forbidden|missing authentication header|(?:status|http|error)?\s*[:(]?\s*(?:400|401|403)\b/i.test(
+                      message,
+                    )
                     const currentUsedKey = yield* provider.currentKey(candidate.providerID)
-                    if (currentUsedKey) {
+                    if (currentUsedKey && (rateLimited || credentialFailure)) {
+                      const status = rateLimited ? "rate_limited" : "invalid"
                       yield* Effect.promise(() => import("../api/ApiVault").then((m) => m.updateApiKeyStatus(candidate.providerID, currentUsedKey, status)))
                     }
                     yield* provider.invalidateLanguage(candidate.providerID, candidate.modelID)

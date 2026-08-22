@@ -3,6 +3,23 @@ import { ConfigErrorV1 } from "@nexus-ai/core/v1/config/error"
 import { Cause, Effect } from "effect"
 import { HttpRouter, HttpServerError, HttpServerRespondable, HttpServerResponse } from "effect/unstable/http"
 
+function safeServerMessage(cause: Cause.Cause<unknown>): string {
+  const text = Cause.pretty(cause)
+  if (/no api key|missing.*(?:api key|credential)|credential.*missing|authentication.*missing/i.test(text)) {
+    return "No API key is configured for the selected provider. Configure a provider key and retry."
+  }
+  if (/invalid.*api key|api key.*(?:invalid|not valid)|unauthorized|forbidden|\b(?:401|403)\b/i.test(text)) {
+    return "Provider authentication failed. Check the selected provider key and retry."
+  }
+  if (/model.*(?:not found|does not exist|unsupported)|unsupported.*model|\b404\b/i.test(text)) {
+    return "The selected model is unavailable for this provider. Run `nexus models` and choose a supported text model."
+  }
+  if (/getaddrinfo|ENOTFOUND|EAI_AGAIN|ETIMEDOUT|network|transport/i.test(text)) {
+    return "The provider request could not reach the network. Check DNS or connectivity and retry."
+  }
+  return "Unexpected server error. Check server logs for details."
+}
+
 // Keep typed HttpApi failures on their declared error path; this boundary only replaces defect-only empty 500s.
 export const errorLayer = HttpRouter.middleware<{ handles: unknown }>()((effect) =>
   effect.pipe(
@@ -31,7 +48,7 @@ export const errorLayer = HttpRouter.middleware<{ handles: unknown }>()((effect)
         Effect.as(
           HttpServerResponse.jsonUnsafe(
             new NamedError.Unknown({
-              message: "Unexpected server error. Check server logs for details.",
+              message: safeServerMessage(cause),
               ref,
             }).toObject(),
             { status: 500 },

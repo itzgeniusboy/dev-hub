@@ -53,6 +53,14 @@ function setupSafeURL(url: string) {
   return url.replace(/([?&](?:key|api[_-]?key|token)=)[^&]+/gi, "$1<redacted>")
 }
 
+export function isChatModelID(id: string, provider: KeyProvider): boolean {
+  const lower = id.toLowerCase()
+  if (/(?:whisper|audio|speech|tts|image|vision|embedding|embed|moderation|rerank|guard|safety|transcription)/i.test(lower)) return false
+  if (provider === "groq") return /(?:llama|mixtral|gemma|qwen|deepseek)/i.test(lower)
+  if (provider === "openrouter") return /(?:free|llama|mistral|gemma|qwen|deepseek|hermes|gpt)/i.test(lower)
+  return /gemini-(?:3(?:\.\d+)?|2\.5|2\.0|1\.5)-(?:flash|pro)/i.test(id)
+}
+
 async function setupResponseOK(provider: string, response: Response, url: string) {
   console.log(`Response status: ${response.status}`)
   if (!response.ok) {
@@ -87,9 +95,11 @@ async function validateKey(provider: KeyProvider, key: string): Promise<boolean>
       const preferred = PREFERRED_MODELS[provider]
       const FALLBACK = { groq: "llama-3.1-8b-instant", openrouter: "openai/gpt-oss-120b:free" } as const
       const safeFallback = provider === "groq" || provider === "openrouter" ? FALLBACK[provider] : undefined
-      const model = preferred.find((id) => ids.includes(id)) ?? 
-                    ids.find((id) => preferred.some((wanted) => id.startsWith(wanted.split(":")[0]))) ?? 
-                    (safeFallback && ids.includes(safeFallback) ? safeFallback : null)
+      const model =
+        preferred.find((id) => ids.includes(id)) ??
+        ids.find((id) => preferred.some((wanted) => id.startsWith(wanted.split(":")[0])) && isChatModelID(id, provider)) ??
+        (safeFallback && ids.includes(safeFallback) ? safeFallback : undefined) ??
+        ids.find((id) => isChatModelID(id, provider))
       if (!model) {
         console.error(`❌ No compatible chat model found for validation in provider catalog.`)
         return false
@@ -117,9 +127,11 @@ async function validateKey(provider: KeyProvider, key: string): Promise<boolean>
     const preferred = PREFERRED_MODELS.google
     const model =
       preferred.find((id) => ids.includes(id)) ??
-      ids.find((id) => /gemini-(?:2\.5|2\.0|1\.5)-flash(?:$|-)/i.test(id)) ??
-      "gemini-1.5-flash"
-    if (!model) return false
+      ids.find((id) => isChatModelID(id, provider))
+    if (!model) {
+      console.error(`❌ No compatible text-generation model found in the Gemini catalog.`)
+      return false
+    }
     const testURL = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(normalizedKey)}`
     const testResponse = await fetch(testURL, {
       method: "POST",

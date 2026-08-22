@@ -81,24 +81,30 @@ export class RotationEngine {
   }
 
   has(providerID: string): boolean {
-    return this.enabled && keyValues(this.keys, providerID).some((value) => value.trim().length > 0)
+    return this.keyCount(providerID) > 0
   }
 
-  /** Number of distinct non-empty keys available for this provider's rotation cycle. */
+  /** Number of keys that can still participate in the current rotation cycle. */
   keyCount(providerID: string): number {
     if (!this.enabled) return 0
-    return keyValues(this.keys, providerID).filter((value) => typeof value === "string" && value.trim().length > 0).length
+    const now = Date.now()
+    return keyValues(this.keys, providerID).filter((value) => {
+      if (typeof value !== "string" || value.trim().length === 0) return false
+      const status = getCachedKeyStatus(value)
+      if (!status || status.status === "active" || status.status === "unknown" || status.status === "rate_limited") return true
+      return status.status === "suspended" && (!status.suspendedUntil || Date.parse(status.suspendedUntil) <= now)
+    }).length
   }
 
   static isRateLimited(error: unknown): boolean {
     const message = error instanceof Error ? error.message : String(error)
-    return /rate.?limit|too many requests|quota exceeded|freeusagelimit/i.test(message)
+    return /rate.?limit|too many requests|quota exceeded|freeusagelimit|(?:status|http|error)?\s*[:(]?\s*429\b/i.test(message)
   }
 
   /** Provider failures that should advance to another configured engine. */
   static isFallbackable(error: unknown): boolean {
     const message = error instanceof Error ? error.message : String(error)
-    return /rate.?limit|too many requests|quota exceeded|freeusagelimit|(?:model|resource).*(?:not found|does not exist|do not have access)|(?:not found|does not exist).*(?:model|resource)|invalid[_ -]?api[_ -]?key|api[_ -]?key.*invalid|(?:invalid|missing).*(?:authentication|credentials)|unauthorized|forbidden|missing authentication header|(?:status|http|error)?\s*[:(]?\s*(?:401|403|404|429)\b|unexpected server error|failed to fetch/i.test(
+    return /rate.?limit|too many requests|quota exceeded|freeusagelimit|(?:model|resource).*(?:not found|does not exist|do not have access)|(?:not found|does not exist).*(?:model|resource)|invalid[_ -]?api[_ -]?key|api[_ -]?key.*(?:invalid|not valid)|(?:invalid|missing).*(?:authentication|credentials)|unauthorized|forbidden|missing authentication header|(?:status|http|error)?\s*[:(]?\s*(?:401|403|404|429)\b|unexpected server error|failed to fetch/i.test(
       message,
     )
   }
@@ -115,21 +121,44 @@ export const PREFERRED_MODELS = {
     "mistralai/mistral-7b-instruct:free",
     "nousresearch/hermes-3-llama-3.1-405b:free",
   ],
-  google: ["gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-1.5-pro"],
+  // Prefer current text-generation models, while retaining older IDs for providers
+  // whose catalog/API still exposes them. Never use TTS/image/audio models here.
+  google: ["gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-flash-8b", "gemini-1.5-pro"],
 } as const
 
 export type PreferredProvider = keyof typeof PREFERRED_MODELS
 
+export function isTextGenerationCandidate(providerID: string, id: string, model: unknown): boolean {
+  const lower = id.toLowerCase()
+  // These model families do not implement the text chat request used by
+  // `nexus models test`. In particular, a broad /gemini/ fallback can select
+  // Gemini TTS, image, or native-audio previews when the catalog is partial.
+  if (/(?:tts|native-audio|audio|image|video|embedding|embed|speech|lyria|music|deep-research|computer-use|robotics|banana)/i.test(lower)) {
+    return false
+  }
+  if (!model || typeof model !== "object") return true
+  const value = model as { capabilities?: { input?: { text?: boolean }; output?: { text?: boolean } }; modalities?: { input?: unknown[]; output?: unknown[] } }
+  if (value.capabilities?.output?.text === false) return false
+  if (Array.isArray(value.modalities?.output) && !value.modalities.output.includes("text")) return false
+  if (value.capabilities?.input?.text === false) return false
+  if (Array.isArray(value.modalities?.input) && !value.modalities.input.includes("text")) return false
+  return true
+}
+
 export function preferredModelForProvider(providerID: string, models: Record<string, unknown>): string | undefined {
   const preferred = PREFERRED_MODELS[providerID as PreferredProvider]
-  if (preferred) {
-    const catalogKeys = Object.keys(models)
-    for (const id of preferred) {
-      if (models[id] !== undefined) return id
-      // Fallback: match catalog keys that start with the preferred ID or vice-versa
-      const partialMatch = catalogKeys.find((k) => id.startsWith(k) || k.startsWith(id) || k.includes(id.split(":")[0]))
-      if (partialMatch) return partialMatch
-    }
+  if (!preferred) return undefined
+  const catalogKeys = Object.keys(models)
+  for (const id of preferred) {
+    if (models[id] !== undefined && isTextGenerationCandidate(providerID, id, models[id])) return id
+    // Match provider aliases/versions only when the matched entry is also a
+    // text-generation model. This prevents a partial match from selecting TTS.
+    const partialMatch = catalogKeys.find(
+      (k) =>
+        isTextGenerationCandidate(providerID, k, models[k]) &&
+        (id.startsWith(k) || k.startsWith(id) || k.includes(id.split(":")[0])),
+    )
+    if (partialMatch) return partialMatch
   }
   return undefined
 }
@@ -179,11 +208,14 @@ export function modelForProvider(providerID: string, models: Record<string, unkn
   const ids = Object.keys(models)
   const preferred = preferredModelForProvider(providerID, models)
   if (preferred) return preferred
-  if (providerID === "ollama") return ids.find((id) => /qwen2\.5-coder|llama3|phi3/i.test(id)) ?? ids[0]
-  if (providerID === "groq") return ids.find((id) => /llama|mixtral/i.test(id)) ?? ids[0]
-  if (providerID === "openrouter") return ids.find((id) => /free/i.test(id)) ?? ids[0]
-  if (providerID === "google") return ids.find((id) => /gemini/i.test(id)) ?? ids[0]
-  return ids[0]
+  const textIds = ids.filter((id) => isTextGenerationCandidate(providerID, id, models[id]))
+  if (providerID === "ollama") return textIds.find((id) => /qwen2\.5-coder|llama3|phi3/i.test(id)) ?? textIds[0]
+  if (providerID === "groq") return textIds.find((id) => /llama|mixtral/i.test(id)) ?? textIds[0]
+  if (providerID === "openrouter") return textIds.find((id) => /free/i.test(id)) ?? textIds[0]
+  if (providerID === "google") {
+    return textIds.find((id) => /gemini-(?:3(?:\.\d+)?|2\.5|2\.0|1\.5)-(?:flash|pro)/i.test(id)) ?? textIds[0]
+  }
+  return textIds[0]
 }
 
 export function fallbackProviders(configured: Record<string, unknown>, available: string[]): string[] {

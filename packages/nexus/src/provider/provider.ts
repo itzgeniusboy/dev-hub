@@ -37,13 +37,11 @@ import {
   isDeprecatedFreeProvider,
   configuredProviderKeys,
   modelForProvider,
+  PREFERRED_MODELS,
 } from "./rotation"
 import { apiVaultKeyEntries, getApiVaultStatus, verifyAllVaultKeys, getCachedKeyStatus } from "../api/ApiVault"
 
 function mergeApiVaultKeys(configured: unknown): Record<string, string[]> {
-  // Trigger non-blocking health check to mark invalid/rate-limited keys
-  verifyAllVaultKeys().catch(() => {})
-
   const result: Record<string, string[]> = {}
   if (configured && typeof configured === "object" && !Array.isArray(configured)) {
     for (const [provider, values] of Object.entries(configured as Record<string, unknown>)) {
@@ -65,6 +63,78 @@ function mergeApiVaultKeys(configured: unknown): Record<string, string[]> {
     }
     const keys = result[provider] ?? []
     if (!keys.includes(entry.key)) result[provider] = [...keys, entry.key]
+  }
+  verifyAllVaultKeys(result).catch(() => {})
+  return result
+}
+
+type LocalFallbackProvider = {
+  id: string
+  name: string
+  api: string
+  env: string[]
+  npm: string
+  models: Record<string, ModelsDev.Model>
+}
+
+function localFallbackModel(id: string): ModelsDev.Model {
+  return {
+    id,
+    name: id,
+    release_date: "",
+    attachment: false,
+    reasoning: false,
+    temperature: true,
+    tool_call: true,
+    limit: { context: 128000, output: 8192 },
+    modalities: { input: ["text"], output: ["text"] },
+  }
+}
+
+const LOCAL_FALLBACK_PROVIDERS: Record<string, Omit<LocalFallbackProvider, "models">> = {
+  groq: {
+    id: "groq",
+    name: "Groq",
+    api: "https://api.groq.com/openai/v1",
+    env: ["GROQ_API_KEY"],
+    npm: "@ai-sdk/groq",
+  },
+  openrouter: {
+    id: "openrouter",
+    name: "OpenRouter",
+    api: "https://openrouter.ai/api/v1",
+    env: ["OPENROUTER_API_KEY"],
+    npm: "@openrouter/ai-sdk-provider",
+  },
+  google: {
+    id: "google",
+    name: "Gemini",
+    api: "https://generativelanguage.googleapis.com/v1beta",
+    env: ["GEMINI_API_KEY", "GOOGLE_GENERATIVE_AI_API_KEY"],
+    npm: "@ai-sdk/google",
+  },
+}
+
+export function withLocalFallbackCatalog(
+  catalog: Record<string, ModelsDev.Provider>,
+  apiKeys: Record<string, string[]>,
+): Record<string, ModelsDev.Provider> {
+  const result = { ...catalog }
+  for (const [providerID, definition] of Object.entries(LOCAL_FALLBACK_PROVIDERS)) {
+    if (configuredProviderKeys(apiKeys, providerID).length === 0) continue
+    const existing = result[providerID]
+    const models = Object.fromEntries(
+      PREFERRED_MODELS[providerID as keyof typeof PREFERRED_MODELS].map((id) => [id, localFallbackModel(id)]),
+    )
+    result[providerID] = {
+      ...(existing ?? definition),
+      id: providerID,
+      name: existing?.name ?? definition.name,
+      api: existing?.api ?? definition.api,
+      env: existing?.env ?? definition.env,
+      npm: existing?.npm ?? definition.npm,
+      models: { ...models, ...(existing?.models ?? {}) },
+    }
   }
   return result
 }
@@ -1475,7 +1545,7 @@ const layer = Layer.effect(
         const cfg = yield* config.get()
         const effectiveApiKeys = mergeApiVaultKeys(cfg.api_keys)
         const rotation = new RotationEngine(effectiveApiKeys, cfg.rotation !== false && getApiVaultStatus().autoRotate)
-        const modelsDev = yield* modelsDevSvc.get()
+        const modelsDev = withLocalFallbackCatalog(yield* modelsDevSvc.get(), effectiveApiKeys)
         const catalog = mapValues(modelsDev, fromModelsDevProvider)
         const database = mapValues(catalog, toPublicInfo)
 
