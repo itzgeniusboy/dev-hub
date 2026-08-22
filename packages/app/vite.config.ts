@@ -28,6 +28,6 @@ export default defineConfig({
   },
   build: {
     target: "esnext",
-    sourcemap: true,
+    sourcemap: process.env.NEXUS_DISABLE_SOURCEMAP === "1" ? false : true,
   },
 })
