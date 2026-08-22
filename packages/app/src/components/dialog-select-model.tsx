@@ -1,7 +1,18 @@
 import { Popover as Kobalte } from "@kobalte/core/popover"
-import { Component, ComponentProps, createEffect, createMemo, For, JSX, Show } from "solid-js"
+import {
+  Component,
+  ComponentProps,
+  createEffect,
+  createMemo,
+  createResource,
+  createSignal,
+  For,
+  JSX,
+  Show,
+} from "solid-js"
 import { createStore } from "solid-js/store"
 import { useLocal } from "@/context/local"
+import { useServerSDK } from "@/context/server-sdk"
 import { useDialog } from "@nexus-ai/ui/context/dialog"
 import { popularProviders } from "@/hooks/use-providers"
 import { Button } from "@nexus-ai/ui/button"
@@ -53,18 +64,49 @@ const ModelList: Component<{
 }> = (props) => {
   const model = props.model ?? useLocal().model
   const language = useLanguage()
+  const serverSDK = useServerSDK()
+  const [activeModels] = createResource(() => serverSDK().client.providerVault.models.active())
+  const [activeOnly, setActiveOnly] = createSignal(false)
+  const activeKeys = createMemo(() => {
+    const keys = new Set<string>()
+    for (const item of activeModels()?.models ?? []) {
+      keys.add(`${item.provider}:${item.model}`)
+      if (item.provider === "gemini") keys.add(`google:${item.model}`)
+      if (item.provider === "google") keys.add(`gemini:${item.model}`)
+    }
+    return keys
+  })
 
   const models = createMemo(() =>
     model
       .list()
       .filter((m) => model.visible({ modelID: m.id, providerID: m.provider.id }))
-      .filter((m) => (props.provider ? m.provider.id === props.provider : true)),
+      .filter((m) => (props.provider ? m.provider.id === props.provider : true))
+      .filter((m) => !activeOnly() || activeKeys().has(`${m.provider.id}:${m.id}`)),
   )
 
   return (
     <List
       class={`flex-1 px-3 min-h-0 [&_[data-slot=list-scroll]]:flex-1 [&_[data-slot=list-scroll]]:min-h-0 ${props.class ?? ""}`}
-      search={{ placeholder: language.t("dialog.model.search.placeholder"), autofocus: true, action: props.action }}
+      search={{
+        placeholder: language.t("dialog.model.search.placeholder"),
+        autofocus: true,
+        action: (
+          <div class="flex items-center gap-2">
+            <Show when={(activeModels()?.models.length ?? 0) > 0}>
+              <button
+                type="button"
+                class="text-12-medium text-text-weak hover:text-text-base"
+                aria-pressed={activeOnly()}
+                onClick={() => setActiveOnly((value) => !value)}
+              >
+                {activeOnly() ? "All models" : "Active only"}
+              </button>
+            </Show>
+            {props.action}
+          </div>
+        ),
+      }}
       emptyMessage={language.t("dialog.model.empty")}
       key={(x) => `${x.provider.id}:${x.id}`}
       items={models}
@@ -242,6 +284,9 @@ export function ModelSelectorPopoverV2(props: {
       groups={controller.groups}
       current={controller.current}
       select={controller.select}
+      activeOnly={controller.activeOnly}
+      setActiveOnly={controller.setActiveOnly}
+      activeCount={controller.activeCount}
       onManage={() => {
         void import("./dialog-manage-models").then((module) => {
           void dialog.show(() => <module.DialogManageModelsV2 />)
@@ -258,14 +303,30 @@ function createModelSelectorController(input: {
   onSelect: () => void
 }) {
   const model = input.model ?? useLocal().model
+  const serverSDK = useServerSDK()
+  const [activeModels] = createResource(() => serverSDK().client.providerVault.models.active())
+  const [activeOnly, setActiveOnly] = createSignal(false)
+  const activeKeys = createMemo(() => {
+    const keys = new Set<string>()
+    for (const item of activeModels()?.models ?? []) {
+      keys.add(`${item.provider}:${item.model}`)
+      if (item.provider === "gemini") keys.add(`google:${item.model}`)
+      if (item.provider === "google") keys.add(`gemini:${item.model}`)
+    }
+    return keys
+  })
   const allModels = createMemo(() =>
     model
       .list()
       .filter((item) => model.visible({ modelID: item.id, providerID: item.provider.id }))
-      .filter((item) => (input.provider() ? item.provider.id === input.provider() : true)),
+      .filter((item) => (input.provider() ? item.provider.id === input.provider() : true))
+      .filter((item) => !activeOnly() || activeKeys().has(`${item.provider.id}:${item.id}`)),
   )
 
   return {
+    activeOnly,
+    setActiveOnly,
+    activeCount: () => activeModels()?.models.length ?? 0,
     models: (search: string) => {
       const query = search.trim()
       const filtered = query
@@ -297,6 +358,9 @@ function ModelSelectorPopoverV2View(props: {
   groups: (models: ModelItem[]) => { category: string; items: ModelItem[] }[]
   current: () => string | undefined
   select: (item: ModelItem) => void
+  activeOnly: () => boolean
+  setActiveOnly: (value: boolean) => void
+  activeCount: () => number
   onManage: () => void
   onClose: () => void
 }) {
@@ -436,6 +500,17 @@ function ModelSelectorPopoverV2View(props: {
               </Show>
             </div>
           </div>
+          <Show when={props.activeCount() > 0}>
+            <button
+              type="button"
+              class="flex h-7 items-center justify-between px-3 text-[12px] font-[440] text-v2-text-text-muted hover:bg-v2-overlay-simple-overlay-hover"
+              aria-pressed={props.activeOnly()}
+              onClick={() => props.setActiveOnly(!props.activeOnly())}
+            >
+              <span>{props.activeOnly() ? "Showing active API models" : "Show active API models"}</span>
+              <span class="text-v2-text-text-faint">{props.activeCount()}</span>
+            </button>
+          </Show>
           <div class="h-px bg-v2-border-border-muted" />
           <ScrollView data-slot="model-selector-scroll" class="max-h-[220px] min-h-0">
             <div class="flex flex-col p-0.5 pt-0">

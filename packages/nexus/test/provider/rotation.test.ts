@@ -1,7 +1,16 @@
 import { mkdtempSync, rmSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
-import { addApiKey, getCachedKeyStatus, loadApiVault, resetApiVaultForTests, saveApiVault, updateApiKeyStatus } from "@/api/ApiVault"
+import {
+  addApiKey,
+  apiVaultPublicRows,
+  ensureApiKey,
+  getCachedKeyStatus,
+  loadApiVault,
+  resetApiVaultForTests,
+  saveApiVault,
+  updateApiKeyStatus,
+} from "@/api/ApiVault"
 import {
   isTextGenerationCandidate,
   modelForProvider,
@@ -26,6 +35,21 @@ afterEach(() => {
   rmSync(isolatedHome, { recursive: true, force: true })
 })
 
+describe("provider key UI data", () => {
+  test("migrates Auth keys idempotently and returns only masked rows", () => {
+    const raw = "sk-or-v1-0123456789abcdef"
+    const first = ensureApiKey("openrouter", raw)
+    const second = ensureApiKey("openrouter", raw)
+    const rows = apiVaultPublicRows()
+
+    expect(first?.status).toBe("unknown")
+    expect(second?.key).toBe(raw)
+    expect(rows).toHaveLength(1)
+    expect(rows[0]?.keys[0]?.key).not.toBe(raw)
+    expect(JSON.stringify(rows)).not.toContain(raw)
+  })
+})
+
 describe("provider model selection", () => {
   test("does not select a Gemini TTS model from a partial catalog", () => {
     const models = {
@@ -39,7 +63,9 @@ describe("provider model selection", () => {
 
     expect(preferredModelForProvider("google", models)).toBe("gemini-2.5-flash")
     expect(modelForProvider("google", models)).toBe("gemini-2.5-flash")
-    expect(isTextGenerationCandidate("google", "gemini-3.1-flash-tts-preview", models["gemini-3.1-flash-tts-preview"])).toBe(false)
+    expect(
+      isTextGenerationCandidate("google", "gemini-3.1-flash-tts-preview", models["gemini-3.1-flash-tts-preview"]),
+    ).toBe(false)
   })
 
   test("returns no model when a provider has only non-text models", () => {
@@ -65,7 +91,6 @@ describe("provider model selection", () => {
   })
 })
 
-
 describe("offline provider catalog fallback", () => {
   test("creates text-only local models only for configured providers", async () => {
     const { withLocalFallbackCatalog } = await import("@/provider/provider")
@@ -76,7 +101,6 @@ describe("offline provider catalog fallback", () => {
     expect(catalog.groq.models["llama-3.1-8b-instant"]).toBeUndefined()
   })
 })
-
 
 describe("preferred defaults", () => {
   test("does not retain known stale Groq or Gemini defaults", async () => {
@@ -108,7 +132,6 @@ describe("setup validation model candidates", () => {
     expect(isChatModelID("meta-llama/llama-3.1-8b-instruct:free", "openrouter")).toBe(true)
   })
 })
-
 
 describe("vault-aware key rotation", () => {
   test("skips a rate-limited key while another healthy key exists, then allows it as the last key", () => {

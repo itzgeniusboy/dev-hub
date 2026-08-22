@@ -3,13 +3,27 @@ import { Config } from "@/config/config"
 import { ModelsDev } from "@nexus-ai/core/models-dev"
 import { Provider } from "@/provider/provider"
 import { Auth } from "@/auth"
+import {
+  addApiKey,
+  apiVaultKeyEntries,
+  apiVaultPublicRows,
+  discoverProviderModels,
+  ensureApiKey,
+  getCachedKeyStatus,
+  loadApiVault,
+  maskApiKey,
+  normalizeProvider,
+  removeApiKey,
+  updateApiKeyStatus,
+} from "@/api/ApiVault"
+import { MODEL_MAP } from "@/api/ModelRouter"
 
 import { mapValues } from "remeda"
 import { Effect, Schema } from "effect"
 import { HttpServerRequest, HttpServerResponse } from "effect/unstable/http"
 import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { InstanceHttpApi } from "../api"
-import { ProviderAuthApiError } from "../groups/provider"
+import { ProviderAuthApiError, ProviderVaultApiError } from "../groups/provider"
 import { ProviderV2 } from "@nexus-ai/core/provider"
 
 function mapProviderAuthError<A, R>(self: Effect.Effect<A, ProviderAuth.Error, R>) {
@@ -30,6 +44,41 @@ function mapProviderAuthError<A, R>(self: Effect.Effect<A, ProviderAuth.Error, R
       return new ProviderAuthApiError({ name: "BadRequest", data: {} })
     }),
   )
+}
+
+function vaultError(error: unknown, providerID?: string) {
+  const message = error instanceof Error ? error.message : String(error)
+  const notFound = message.startsWith("No ")
+  return new ProviderVaultApiError({
+    name: notFound ? "NotFound" : "BadRequest",
+    data: { ...(providerID ? { providerID } : {}), message },
+  })
+}
+
+function publicEntry(entry: ReturnType<typeof addApiKey>, index = 1) {
+  return {
+    index,
+    label: entry.label,
+    key: maskApiKey(entry.key),
+    status: entry.status,
+    failures: entry.failures,
+    added: entry.added,
+    ...(entry.lastChecked ? { lastChecked: entry.lastChecked } : {}),
+    ...(entry.suspendedUntil ? { suspendedUntil: entry.suspendedUntil } : {}),
+    todayRequests: 0,
+    todayInputTokens: 0,
+    todayOutputTokens: 0,
+  }
+}
+
+function logicalModelsFor(provider: string, model: string) {
+  return Object.entries(MODEL_MAP)
+    .filter(([, definition]) =>
+      Object.entries(definition.providerModels).some(
+        ([candidate, candidateModel]) => candidate === provider && candidateModel === model,
+      ),
+    )
+    .map(([alias]) => alias)
 }
 
 export const providerHandlers = HttpApiBuilder.group(InstanceHttpApi, "provider", (handlers) =>
@@ -65,6 +114,157 @@ export const providerHandlers = HttpApiBuilder.group(InstanceHttpApi, "provider"
       return yield* svc.methods()
     })
 
+    const keys = Effect.fn("ProviderHttpApi.keys")(function* () {
+      const credentials = yield* authStore.all().pipe(Effect.orDie)
+      const existing = new Set(apiVaultKeyEntries().map(({ provider, entry }) => `${provider}:${entry.key}`))
+      for (const [providerID, credential] of Object.entries(credentials)) {
+        if (credential.type !== "api") continue
+        const normalized = normalizeProvider(providerID)
+        if (!normalized || existing.has(`${normalized}:${credential.key}`)) continue
+        const entry = ensureApiKey(normalized, credential.key, "auth")
+        if (entry) existing.add(`${normalized}:${entry.key}`)
+      }
+      const vault = loadApiVault()
+      return { providers: apiVaultPublicRows(), autoRotate: vault.autoRotate }
+    })
+
+    const keysAdd = Effect.fn("ProviderHttpApi.keysAdd")(function* (ctx: {
+      payload: { provider: string; key: string; label?: string }
+    }) {
+      let entry: ReturnType<typeof addApiKey>
+      try {
+        entry = addApiKey(ctx.payload.provider, ctx.payload.key, ctx.payload.label ?? "default")
+      } catch (error) {
+        return yield* Effect.fail(vaultError(error, ctx.payload.provider))
+      }
+      const normalized = normalizeProvider(ctx.payload.provider)
+      if (normalized) {
+        yield* authStore
+          .set(ctx.payload.provider, new Auth.Api({ type: "api", key: entry.key }))
+          .pipe(Effect.orElseSucceed(() => undefined))
+      }
+      const providerID = normalized ?? ctx.payload.provider
+      const index = apiVaultPublicRows()
+        .find((item) => item.provider === providerID)
+        ?.keys.findIndex((item) => item.key === maskApiKey(entry.key))
+      return publicEntry(entry, index !== undefined && index >= 0 ? index + 1 : 1)
+    })
+
+    const keysRemove = Effect.fn("ProviderHttpApi.keysRemove")(function* (ctx: {
+      params: { providerID: string; index: string }
+    }) {
+      const index = Number(ctx.params.index)
+      let removed: ReturnType<typeof removeApiKey>
+      try {
+        removed = removeApiKey(ctx.params.providerID, index)
+      } catch (error) {
+        return yield* Effect.fail(vaultError(error, ctx.params.providerID))
+      }
+      const normalized = normalizeProvider(ctx.params.providerID)
+      if (normalized) {
+        const current = yield* authStore.get(ctx.params.providerID).pipe(Effect.orElseSucceed(() => undefined))
+        if (current?.type === "api" && current.key === removed.key) {
+          const replacement = apiVaultKeyEntries().find(
+            (item) =>
+              item.provider === normalized && (item.entry.status === "active" || item.entry.status === "unknown"),
+          )
+          if (replacement)
+            yield* authStore
+              .set(ctx.params.providerID, new Auth.Api({ type: "api", key: replacement.entry.key }))
+              .pipe(Effect.orElseSucceed(() => undefined))
+          else yield* authStore.remove(ctx.params.providerID).pipe(Effect.orElseSucceed(() => undefined))
+        }
+      }
+      return publicEntry(removed, index)
+    })
+
+    const modelsActive = Effect.fn("ProviderHttpApi.modelsActive")(function* () {
+      const entries = apiVaultKeyEntries()
+      const config = yield* cfg.get()
+      const credentials = yield* authStore.all().pipe(Effect.orDie)
+      const known = new Set(entries.map((item) => `${item.provider}:${item.entry.key}`))
+      for (const [providerID, configuredKeys] of Object.entries(config.api_keys ?? {})) {
+        const normalized = normalizeProvider(providerID)
+        if (!normalized || !Array.isArray(configuredKeys)) continue
+        for (const key of configuredKeys) {
+          if (typeof key !== "string" || !key.trim() || known.has(`${normalized}:${key}`)) continue
+          const cached = getCachedKeyStatus(key)
+          entries.push({
+            provider: normalized,
+            entry: {
+              key,
+              label: "config",
+              added: new Date().toISOString().slice(0, 10),
+              status: cached?.status ?? "unknown",
+              failures: cached?.failures ?? 0,
+              ...(cached?.lastChecked ? { lastChecked: cached.lastChecked } : {}),
+            },
+          })
+          known.add(`${normalized}:${key}`)
+        }
+      }
+      for (const [providerID, credential] of Object.entries(credentials)) {
+        if (credential.type !== "api") continue
+        const normalized = normalizeProvider(providerID)
+        if (!normalized || known.has(`${normalized}:${credential.key}`)) continue
+        entries.push({
+          provider: normalized,
+          entry: {
+            key: credential.key,
+            label: "auth",
+            added: new Date().toISOString().slice(0, 10),
+            status: "unknown",
+            failures: 0,
+          },
+        })
+      }
+      const models = new Map<
+        string,
+        {
+          provider: string
+          model: string
+          status: "active" | "rate_limited" | "invalid" | "suspended" | "unknown"
+          logicalModels: string[]
+        }
+      >()
+      const discoveries = yield* Effect.promise(() =>
+        Promise.all(
+          entries
+            .filter(
+              ({ entry }) =>
+                entry.status !== "invalid" &&
+                !(
+                  entry.status === "suspended" &&
+                  entry.suspendedUntil &&
+                  Date.parse(entry.suspendedUntil) > Date.now()
+                ),
+            )
+            .map(async ({ provider: providerID, entry }) => ({
+              providerID,
+              entry,
+              discovered: await discoverProviderModels(providerID, entry.key),
+            })),
+        ),
+      )
+      for (const { provider: providerID, entry, discovered } of discoveries) {
+        if (discovered.status === "invalid" || discovered.status === "rate_limited")
+          updateApiKeyStatus(providerID, entry.key, discovered.status)
+        for (const model of discovered.models) {
+          const key = `${providerID}:${model}`
+          const current = models.get(key)
+          if (!current || current.status !== "active") {
+            models.set(key, {
+              provider: providerID,
+              model,
+              status: discovered.status,
+              logicalModels: logicalModelsFor(providerID, model),
+            })
+          }
+        }
+      }
+      return { models: [...models.values()], checkedAt: new Date().toISOString() }
+    })
+
     const authorize = Effect.fn("ProviderHttpApi.authorize")(function* (ctx: {
       params: { providerID: ProviderV2.ID }
       payload: ProviderAuth.AuthorizeInput
@@ -86,9 +286,6 @@ export const providerHandlers = HttpApiBuilder.group(InstanceHttpApi, "provider"
       const payload = yield* Schema.decodeUnknownEffect(Schema.fromJsonString(ProviderAuth.AuthorizeInput))(body).pipe(
         Effect.mapError(() => new ProviderAuthApiError({ name: "BadRequest", data: {} })),
       )
-      // Match legacy route behavior: when authorize() resolves without a
-      // result (e.g. no further redirect), serialize as JSON `null` instead
-      // of an empty body so clients can `.json()` parse the response.
       const result = yield* authorize({ params: ctx.params, payload })
       return HttpServerResponse.jsonUnsafe(result ?? null)
     })
@@ -110,6 +307,10 @@ export const providerHandlers = HttpApiBuilder.group(InstanceHttpApi, "provider"
     return handlers
       .handle("list", list)
       .handle("auth", auth)
+      .handle("keys", keys)
+      .handle("keysAdd", keysAdd)
+      .handle("keysRemove", keysRemove)
+      .handle("modelsActive", modelsActive)
       .handleRaw("authorize", authorizeRaw)
       .handle("callback", callback)
   }),

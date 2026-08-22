@@ -4,12 +4,13 @@ import { ProviderIcon } from "@nexus-ai/ui/provider-icon"
 import { Tag } from "@nexus-ai/ui/tag"
 import { showToast } from "@/utils/toast"
 import { popularProviders, useProviders } from "@/hooks/use-providers"
-import { createMemo, type Component, For, Show } from "solid-js"
+import { createMemo, createResource, type Component, For, Show } from "solid-js"
 import { useLanguage } from "@/context/language"
 import { useServerProtocol, useServerSDK } from "@/context/server-sdk"
 import { useServerSync } from "@/context/server-sync"
 import { DialogConnectProvider, useProviderConnectController } from "./dialog-connect-provider"
 import { DialogCustomProvider } from "./dialog-custom-provider"
+import { DialogProviderKeys } from "./dialog-provider-keys"
 import { SettingsList } from "./settings-list"
 import { SettingsServerPicker, SettingsServerScope } from "./settings-server-picker"
 
@@ -43,6 +44,19 @@ const SettingsProvidersContent: Component<{ onBack?: () => void }> = (props) => 
   const serverSync = useServerSync()
   const providers = useProviders(() => undefined)
   const providerConnect = useProviderConnectController({ onBack: props.onBack })
+  const [activeModels, { refetch: refetchActiveModels }] = createResource(() =>
+    serverSDK().client.providerVault.models.active(),
+  )
+
+  const vaultProvider = (providerID: string) => (providerID === "google" ? "gemini" : providerID)
+  const canManageKeys = (providerID: string) =>
+    ["groq", "openrouter", "deepseek", "gemini", "google", "cerebras", "openai", "opencode"].includes(providerID)
+
+  const manageKeys = (providerID: string) => {
+    void dialog
+      .show(() => <DialogProviderKeys provider={vaultProvider(providerID)} />)
+      .then(() => void refetchActiveModels())
+  }
 
   const connect = (provider?: string) => {
     providerConnect.select(provider)
@@ -50,9 +64,7 @@ const SettingsProvidersContent: Component<{ onBack?: () => void }> = (props) => 
   }
 
   const connected = createMemo(() => {
-    return providers
-      .connected()
-      .filter((p) => p.id !== "nexus" || Object.values(p.models).find((m) => m.cost?.input))
+    return providers.connected().filter((p) => p.id !== "nexus" || Object.values(p.models).find((m) => m.cost?.input))
   })
 
   const popular = createMemo(() => {
@@ -182,9 +194,16 @@ const SettingsProvidersContent: Component<{ onBack?: () => void }> = (props) => 
                         </span>
                       }
                     >
-                      <Button size="large" variant="ghost" onClick={() => void disconnect(item.id, item.name)}>
-                        {language.t("common.disconnect")}
-                      </Button>
+                      <div class="flex items-center gap-2">
+                        <Show when={canManageKeys(item.id)}>
+                          <Button size="large" variant="ghost" onClick={() => manageKeys(item.id)}>
+                            Manage API keys
+                          </Button>
+                        </Show>
+                        <Button size="large" variant="ghost" onClick={() => void disconnect(item.id, item.name)}>
+                          {language.t("common.disconnect")}
+                        </Button>
+                      </div>
                     </Show>
                   </div>
                 )}
@@ -192,6 +211,33 @@ const SettingsProvidersContent: Component<{ onBack?: () => void }> = (props) => 
             </Show>
           </SettingsList>
         </div>
+
+        <Show when={!activeModels.loading && (activeModels()?.models.length ?? 0) > 0}>
+          <div class="flex flex-col gap-1" data-component="active-models-section">
+            <h3 class="text-14-medium text-text-strong pb-2">Active Models</h3>
+            <SettingsList>
+              <For each={activeModels()?.models ?? []}>
+                {(model) => (
+                  <div class="flex flex-wrap items-center justify-between gap-3 min-h-14 py-3 border-b border-border-weak-base last:border-none">
+                    <div class="flex items-center gap-3 min-w-0">
+                      <ProviderIcon id={model.provider} class="size-5 shrink-0 icon-strong-base" />
+                      <span class="text-14-medium text-text-strong truncate">
+                        {model.provider}/{model.model}
+                      </span>
+                      <Tag>{model.status}</Tag>
+                    </div>
+                    <Show when={model.logicalModels.length > 0}>
+                      <span class="text-12-regular text-text-weak">{model.logicalModels.join(", ")}</span>
+                    </Show>
+                  </div>
+                )}
+              </For>
+            </SettingsList>
+            <span class="text-12-regular text-text-weak pt-2">
+              Only models returned by currently usable keys are shown. Quotas are provider-specific.
+            </span>
+          </div>
+        </Show>
 
         <div class="flex flex-col gap-1">
           <h3 class="text-14-medium text-text-strong pb-2">{language.t("settings.providers.section.popular")}</h3>

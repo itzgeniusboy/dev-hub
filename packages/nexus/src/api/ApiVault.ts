@@ -2,7 +2,16 @@ import fs from "fs"
 import os from "os"
 import path from "path"
 
-export const API_PROVIDERS = ["groq", "openrouter", "deepseek", "gemini", "google", "cerebras", "openai", "opencode"] as const
+export const API_PROVIDERS = [
+  "groq",
+  "openrouter",
+  "deepseek",
+  "gemini",
+  "google",
+  "cerebras",
+  "openai",
+  "opencode",
+] as const
 export type ApiProvider = (typeof API_PROVIDERS)[number]
 export type ApiKeyStatus = "active" | "rate_limited" | "invalid" | "suspended" | "unknown"
 
@@ -52,7 +61,10 @@ function normalizeEntry(value: unknown): ApiKeyEntry | undefined {
   const item = value as Record<string, unknown>
   if (typeof item.key !== "string" || !item.key.trim()) return undefined
   const status = item.status
-  const validStatus: ApiKeyStatus = status === "active" || status === "rate_limited" || status === "invalid" || status === "suspended" ? status : "unknown"
+  const validStatus: ApiKeyStatus =
+    status === "active" || status === "rate_limited" || status === "invalid" || status === "suspended"
+      ? status
+      : "unknown"
   return {
     key: item.key.trim(),
     label: typeof item.label === "string" && item.label.trim() ? item.label.trim() : "default",
@@ -66,17 +78,25 @@ function normalizeEntry(value: unknown): ApiKeyEntry | undefined {
 
 function normalizeVault(value: Record<string, unknown>): ApiVaultData {
   const providers: Record<string, ApiKeyEntry[]> = {}
-  const rawProviders = value.providers && typeof value.providers === "object" ? (value.providers as Record<string, unknown>) : {}
+  const rawProviders =
+    value.providers && typeof value.providers === "object" ? (value.providers as Record<string, unknown>) : {}
   for (const [provider, entries] of Object.entries(rawProviders)) {
     if (!Array.isArray(entries)) continue
-    providers[provider.toLowerCase()] = entries.map(normalizeEntry).filter((entry): entry is ApiKeyEntry => Boolean(entry))
+    providers[provider.toLowerCase()] = entries
+      .map(normalizeEntry)
+      .filter((entry): entry is ApiKeyEntry => Boolean(entry))
   }
   const usage: Record<string, ProviderUsage> = {}
   const rawUsage = value.usage && typeof value.usage === "object" ? (value.usage as Record<string, unknown>) : {}
   for (const [provider, raw] of Object.entries(rawUsage)) {
     const item = raw && typeof raw === "object" ? (raw as Record<string, unknown>) : {}
     usage[provider.toLowerCase()] = {
-      todayRequests: typeof item.todayRequests === "number" ? item.todayRequests : typeof item.today_requests === "number" ? item.today_requests : 0,
+      todayRequests:
+        typeof item.todayRequests === "number"
+          ? item.todayRequests
+          : typeof item.today_requests === "number"
+            ? item.today_requests
+            : 0,
       todayInputTokens: typeof item.todayInputTokens === "number" ? item.todayInputTokens : 0,
       todayOutputTokens: typeof item.todayOutputTokens === "number" ? item.todayOutputTokens : 0,
       ...(typeof item.lastUsed === "string" ? { lastUsed: item.lastUsed } : {}),
@@ -129,6 +149,26 @@ export function maskApiKey(key: string): string {
   const value = key.trim()
   if (value.length <= 8) return "********"
   return `${value.slice(0, Math.min(7, value.length - 3))}***${value.slice(-3)}`
+}
+
+export function ensureApiKey(providerInput: string, key: string, label = "auth"): ApiKeyEntry | undefined {
+  const provider = normalizeProvider(providerInput)
+  const value = key.trim()
+  if (!provider || !value) return undefined
+  const vault = loadApiVault()
+  const entries = vault.providers[provider] ?? []
+  const existing = entries.find((entry) => entry.key === value)
+  if (existing) return existing
+  const entry: ApiKeyEntry = {
+    key: value,
+    label: label.trim() || "auth",
+    added: new Date().toISOString().slice(0, 10),
+    status: "unknown",
+    failures: 0,
+  }
+  vault.providers[provider] = [...entries, entry]
+  saveApiVault(vault)
+  return entry
 }
 
 export function addApiKey(providerInput: string, key: string, label = "default"): ApiKeyEntry {
@@ -191,7 +231,9 @@ export function updateApiKeyStatus(providerInput: string, key: string, status: A
       status: failures >= 3 && status !== "active" ? "suspended" : status,
       failures,
       lastChecked: new Date().toISOString(),
-      ...(failures >= 3 && status !== "active" ? { suspendedUntil: new Date(Date.now() + 60 * 60 * 1000).toISOString() } : {}),
+      ...(failures >= 3 && status !== "active"
+        ? { suspendedUntil: new Date(Date.now() + 60 * 60 * 1000).toISOString() }
+        : {}),
     }
     return
   }
@@ -235,11 +277,104 @@ export function availableApiKeys(providerInput: string): ApiKeyEntry[] {
   })
 }
 
-export function apiVaultRows(): Array<{ provider: string; index: number; label: string; key: string; status: ApiKeyStatus; usage: ProviderUsage }> {
+export function apiVaultRows(): Array<{
+  provider: string
+  index: number
+  label: string
+  key: string
+  status: ApiKeyStatus
+  usage: ProviderUsage
+}> {
   const vault = loadApiVault()
   return Object.entries(vault.providers).flatMap(([provider, entries]) =>
-    entries.map((entry, index) => ({ provider, index: index + 1, label: entry.label, key: maskApiKey(entry.key), status: entry.status, usage: vault.usage[provider] ?? { todayRequests: 0, todayInputTokens: 0, todayOutputTokens: 0 } })),
+    entries.map((entry, index) => ({
+      provider,
+      index: index + 1,
+      label: entry.label,
+      key: maskApiKey(entry.key),
+      status: entry.status,
+      usage: vault.usage[provider] ?? { todayRequests: 0, todayInputTokens: 0, todayOutputTokens: 0 },
+    })),
   )
+}
+
+export function apiVaultPublicRows() {
+  const vault = loadApiVault()
+  return Object.entries(vault.providers).map(([provider, entries]) => ({
+    provider,
+    keys: entries.map((entry, index) => ({
+      index: index + 1,
+      label: entry.label,
+      key: maskApiKey(entry.key),
+      status: entry.status,
+      failures: entry.failures,
+      added: entry.added,
+      ...(entry.lastChecked ? { lastChecked: entry.lastChecked } : {}),
+      ...(entry.suspendedUntil ? { suspendedUntil: entry.suspendedUntil } : {}),
+      todayRequests: vault.usage[provider]?.todayRequests ?? 0,
+      todayInputTokens: vault.usage[provider]?.todayInputTokens ?? 0,
+      todayOutputTokens: vault.usage[provider]?.todayOutputTokens ?? 0,
+    })),
+  }))
+}
+
+const discoveredModelsCache = new Map<string, { expiresAt: number; models: string[] }>()
+
+function modelNames(value: unknown): string[] {
+  if (!value || typeof value !== "object") return []
+  const root = value as Record<string, unknown>
+  const isGemini = Array.isArray(root.models)
+  const rows = Array.isArray(root.data) ? root.data : isGemini ? root.models : []
+  return rows
+    .map((item) => {
+      if (typeof item === "string") return item
+      if (!item || typeof item !== "object") return undefined
+      const row = item as Record<string, unknown>
+      if (
+        isGemini &&
+        Array.isArray(row.supportedGenerationMethods) &&
+        !row.supportedGenerationMethods.includes("generateContent")
+      )
+        return undefined
+      const name = typeof row.id === "string" ? row.id : typeof row.name === "string" ? row.name : undefined
+      const normalized = name?.replace("models/", "")
+      if (normalized && /(?:tts|native-audio|audio|image|video|embedding|embed|speech|lyria|music|deep-research|computer-use|robotics|banana)/i.test(normalized)) {
+        return undefined
+      }
+      return normalized
+    })
+    .filter((name): name is string => Boolean(name))
+}
+
+export async function discoverProviderModels(
+  providerInput: string,
+  key: string,
+): Promise<{ status: ApiKeyStatus; models: string[]; code?: number }> {
+  const provider = normalizeProvider(providerInput)
+  const endpoint = endpointFor(providerInput)
+  if (!provider || !endpoint) return { status: "unknown", models: [] }
+  const cacheKey = `${provider}:${key}`
+  const cached = discoveredModelsCache.get(cacheKey)
+  if (cached && cached.expiresAt > Date.now()) return { status: "active", models: cached.models }
+  const controller = new AbortController()
+  const timer = setTimeout(() => controller.abort(), 8000)
+  try {
+    const headers: Record<string, string> = { Authorization: `Bearer ${key}` }
+    const url = provider === "gemini" ? `${endpoint}?key=${encodeURIComponent(key)}` : endpoint
+    if (provider === "gemini") delete headers.Authorization
+    const response = await fetch(url, { headers, signal: controller.signal })
+    if (response.status === 401 || response.status === 403)
+      return { status: "invalid", models: [], code: response.status }
+    if (response.status === 429) return { status: "rate_limited", models: [], code: response.status }
+    if (!response.ok) return { status: "unknown", models: [], code: response.status }
+    const models = modelNames(await response.json().catch(() => ({})))
+    discoveredModelsCache.set(cacheKey, { expiresAt: Date.now() + 2 * 60 * 1000, models })
+    return { status: "active", models, code: response.status }
+  } catch {
+    return { status: "unknown", models: [] }
+  } finally {
+    clearTimeout(timer)
+  }
 }
 
 export function apiVaultKeyEntries(): Array<{ provider: string; entry: ApiKeyEntry }> {
@@ -280,6 +415,7 @@ function endpointFor(providerInput: string): string | undefined {
   if (provider === "gemini") return "https://generativelanguage.googleapis.com/v1beta/models"
   if (provider === "cerebras") return "https://api.cerebras.ai/v1/models"
   if (provider === "openai") return "https://api.openai.com/v1/models"
+  if (provider === "opencode") return "https://opencode.ai/zen/v1/models"
   return undefined
 }
 
@@ -336,32 +472,36 @@ export async function verifyAllVaultKeys(configured: Record<string, string[]> = 
     for (const [prov, entries] of Object.entries(vault.providers)) {
       for (const entry of entries) {
         if (entry.status === "invalid") continue
-        
+
         // Skip check if recently checked (within 5 minutes)
         if (entry.lastChecked && Date.now() - Date.parse(entry.lastChecked) < 5 * 60 * 1000) continue
-        
-        tasks.push((async () => {
-          const { status } = await checkKey(prov, entry.key)
-          if (status !== "unknown") updateApiKeyStatus(prov, entry.key, status)
-        })())
+
+        tasks.push(
+          (async () => {
+            const { status } = await checkKey(prov, entry.key)
+            if (status !== "unknown") updateApiKeyStatus(prov, entry.key, status)
+          })(),
+        )
       }
     }
     for (const [prov, keys] of Object.entries(configured)) {
       for (const key of keys) {
         if (typeof key !== "string" || !key.trim() || vaultKeys.has(key)) continue
-        tasks.push((async () => {
-          const { status } = await checkKey(prov, key)
-          if (status !== "unknown") {
-            cachedConfiguredStatus[key] = {
-              key,
-              label: "config",
-              added: new Date().toISOString().slice(0, 10),
-              status,
-              failures: 0,
-              lastChecked: new Date().toISOString(),
+        tasks.push(
+          (async () => {
+            const { status } = await checkKey(prov, key)
+            if (status !== "unknown") {
+              cachedConfiguredStatus[key] = {
+                key,
+                label: "config",
+                added: new Date().toISOString().slice(0, 10),
+                status,
+                failures: 0,
+                lastChecked: new Date().toISOString(),
+              }
             }
-          }
-        })())
+          })(),
+        )
       }
     }
     await Promise.all(tasks)

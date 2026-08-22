@@ -5,6 +5,7 @@ import { HttpApiBuilder } from "effect/unstable/httpapi"
 import { RootHttpApi } from "../api"
 import { LogInput } from "../groups/control"
 import { ProviderV2 } from "@nexus-ai/core/provider"
+import { addApiKey } from "@/api/ApiVault"
 
 export const controlHandlers = HttpApiBuilder.group(RootHttpApi, "control", (handlers) =>
   Effect.gen(function* () {
@@ -15,6 +16,13 @@ export const controlHandlers = HttpApiBuilder.group(RootHttpApi, "control", (han
       payload: Auth.Info
     }) {
       yield* auth.set(ctx.params.providerID, ctx.payload).pipe(Effect.orDie)
+      if (ctx.payload.type === "api") {
+        try {
+          addApiKey(ctx.params.providerID, ctx.payload.key, "ui")
+        } catch {
+          // Providers outside ApiVault continue to use the regular Auth store.
+        }
+      }
       return true
     })
 

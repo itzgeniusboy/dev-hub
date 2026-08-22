@@ -7,6 +7,46 @@ import { NexusClient } from "./gen/sdk.gen.js"
 import { wrapClientError } from "../error-interceptor.js"
 export { type Config as NexusClientConfig, NexusClient }
 
+export type ProviderVaultKey = {
+  index: number
+  label: string
+  key: string
+  status: "active" | "rate_limited" | "invalid" | "suspended" | "unknown"
+  failures: number
+  added: string
+  lastChecked?: string
+  suspendedUntil?: string
+  todayRequests: number
+  todayInputTokens: number
+  todayOutputTokens: number
+}
+
+export type ProviderVaultKeys = {
+  providers: Array<{ provider: string; keys: Array<ProviderVaultKey> }>
+  autoRotate: boolean
+}
+
+export type ProviderActiveModels = {
+  models: Array<{
+    provider: string
+    model: string
+    status: ProviderVaultKey["status"]
+    logicalModels: string[]
+  }>
+  checkedAt: string
+}
+
+export type ProviderVaultClient = {
+  keys: {
+    list: () => Promise<ProviderVaultKeys>
+    add: (input: { provider: string; key: string; label?: string }) => Promise<ProviderVaultKey>
+    remove: (input: { providerID: string; index: number }) => Promise<ProviderVaultKey>
+  }
+  models: {
+    active: () => Promise<ProviderActiveModels>
+  }
+}
+
 function pick(value: string | null, fallback?: string, encode?: (value: string) => string) {
   if (!value) return
   if (!fallback) return value
@@ -89,5 +129,23 @@ export function createNexusClient(config?: Config & { directory?: string; experi
     return response
   })
   client.interceptors.error.use(wrapClientError)
-  return new NexusClient({ client })
+  const nexus = new NexusClient({ client })
+  const request = <T>(options: Parameters<typeof client.request>[0]) =>
+    client.request({ ...options, responseStyle: "data", throwOnError: true }) as Promise<T>
+  const providerVault: ProviderVaultClient = {
+    keys: {
+      list: () => request<ProviderVaultKeys>({ method: "GET", url: "/provider/keys" }),
+      add: (input) => request<ProviderVaultKey>({ method: "POST", url: "/provider/keys", body: input }),
+      remove: ({ providerID, index }) =>
+        request<ProviderVaultKey>({
+          method: "DELETE",
+          url: "/provider/keys/{providerID}/{index}",
+          path: { providerID, index },
+        }),
+    },
+    models: {
+      active: () => request<ProviderActiveModels>({ method: "GET", url: "/provider/models/active" }),
+    },
+  }
+  return Object.assign(nexus, { providerVault })
 }
