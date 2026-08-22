@@ -5,7 +5,7 @@ import { FreelancerDB } from "./FreelancerDB"
 import { BotAgent } from "./agents/BotAgent"
 import { DebugAgent } from "./agents/DebugAgent"
 import { ToolAgent } from "./agents/ToolAgent"
-import { PersistentTaskQueue } from "./agents/SmartManager"
+import { SmartManager } from "./agents/SmartManager"
 import { readPowerStatus, workloadPolicy } from "@nexus-ai/core/power"
 import { ServiceManager } from "./ServiceManager"
 import type { PowerStatus } from "@nexus-ai/core/power"
@@ -26,7 +26,7 @@ export type BusinessmanDependencies = {
   debugAgent?: Pick<DebugAgent, "execute">
   services?: Pick<ServiceManager, "acquireWakeLock" | "releaseWakeLock" | "notify" | "toast">
   readPowerStatus?: () => Promise<PowerStatus>
-  queue?: Pick<PersistentTaskQueue, "accept" | "update">
+  queue?: Pick<SmartManager, "accept" | "update">
 }
 
 export class Businessman {
@@ -38,7 +38,7 @@ export class Businessman {
   private readonly debugAgent: Pick<DebugAgent, "execute">
   private readonly services: Pick<ServiceManager, "acquireWakeLock" | "releaseWakeLock" | "notify" | "toast">
   private readonly powerStatusReader: () => Promise<PowerStatus>
-  private readonly queue: Pick<PersistentTaskQueue, "accept" | "update">
+  private readonly queue: Pick<SmartManager, "accept" | "update">
 
   constructor(dependencies: BusinessmanDependencies = {}) {
     this.staff = dependencies.staff ?? new StaffManager()
@@ -47,7 +47,7 @@ export class Businessman {
     this.debugAgent = dependencies.debugAgent ?? new DebugAgent()
     this.services = dependencies.services ?? new ServiceManager()
     this.powerStatusReader = dependencies.readPowerStatus ?? readPowerStatus
-    this.queue = dependencies.queue ?? new PersistentTaskQueue()
+    this.queue = dependencies.queue ?? new SmartManager()
   }
 
   async handleTask(userCommand: string): Promise<BusinessmanResult> {

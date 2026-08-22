@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process"
 import { mkdir, writeFile } from "node:fs/promises"
+import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { promisify } from "node:util"
 import { SeniorDevAgent } from "./SeniorDevAgent"
@@ -29,7 +30,9 @@ export type LiaisonOptions = {
   capacityProbe?: CapacityProbe
 }
 
-const statusRoot = join("/tmp", "nexus", "liaison")
+// os.tmpdir() honours TMPDIR, so status files stay writable on native Termux
+// where /tmp is a read-only part of the rootfs.
+const statusRoot = join(tmpdir(), "nexus", "liaison")
 
 export function classifyMessage(message: string): MessageType {
   const lower = message.toLowerCase().trim()
