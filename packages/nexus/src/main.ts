@@ -40,7 +40,9 @@ import { ModCommand } from "./cli/cmd/mod"
 import { AssetCommand } from "./cli/cmd/asset"
 import { LuaCommand } from "./cli/cmd/lua"
 
-const args = hideBin(process.argv)
+const rawArgs = hideBin(process.argv)
+const args = rawArgs
+const keepAliveForLiaisonTask = args[0] === "liaison" && args.length > 1
 
 function show(out: string) {
   const text = out.trimStart()
@@ -158,5 +160,5 @@ try {
   // Most notably, some docker-container-based MCP servers don't handle such signals unless
   // run using `docker run --init`.
   // Explicitly exit to avoid any hanging subprocesses.
-  process.exit()
+  if (!keepAliveForLiaisonTask) process.exit()
 }

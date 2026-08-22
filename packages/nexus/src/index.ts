@@ -9,4 +9,9 @@ if (args.length === 1 && (args[0] === "--version" || args[0] === "-v")) {
   process.exit(0)
 }
 
-await import("./main")
+const { isBareUserTask, runBareUserTask } = await import("./cli/quick-liaison")
+if (isBareUserTask(args)) {
+  await runBareUserTask(args)
+} else {
+  await import("./main")
+}

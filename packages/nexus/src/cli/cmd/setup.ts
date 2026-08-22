@@ -6,6 +6,7 @@ import { Effect, Option } from "effect"
 import { Process } from "@/util/process"
 import { readNexusConfig, writeNexusConfig } from "./config"
 import { PREFERRED_MODELS } from "@/provider/rotation"
+import { setupTermuxKeyboard } from "@nexus/termux-core"
 
 function freeModelDefinitions(provider: keyof typeof PREFERRED_MODELS) {
   return Object.fromEntries(
@@ -311,9 +312,24 @@ export const SetupFreeCommand = effectCmd({
   }),
 })
 
+export const SetupTermuxCommand = effectCmd({
+  command: "termux",
+  describe: "Configure Termux keyboard and clipboard-paste extra keys",
+  instance: false,
+  handler: Effect.fn("Cli.setup.termux")(function* () {
+    const result = yield* Effect.tryPromise(() => setupTermuxKeyboard())
+    if (!result.configured) {
+      yield* Prompt.log.warn(result.message)
+      return
+    }
+    yield* Prompt.log.success("Termux keyboard configuration saved.")
+    yield* Prompt.log.info(result.message)
+  }),
+})
+
 export const SetupCommand = cmd({
   command: "setup",
   describe: "Setup providers and models",
-  builder: (yargs) => yargs.command(SetupOllamaCommand).command(SetupFreeCommand).demandCommand(),
+  builder: (yargs) => yargs.command(SetupOllamaCommand).command(SetupFreeCommand).command(SetupTermuxCommand).demandCommand(),
   async handler() {},
 })

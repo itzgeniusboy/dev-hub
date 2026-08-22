@@ -1,7 +1,9 @@
+import { randomUUID } from "node:crypto"
 import { mkdir, readFile, writeFile } from "node:fs/promises"
 import { basename, join, resolve } from "node:path"
-import { randomUUID } from "node:crypto"
+import { DualWorkerPool } from "./DualWorkerPool"
 import { CodeReader, type FileSummary } from "./SeniorDevAgent"
+import { SmartManager } from "./SmartManager"
 
 export type TaskSize = "small" | "medium" | "large"
 
@@ -60,6 +62,10 @@ export type TeamStatus = {
   completedModules: number
   workers: number
   completedWorkers: number
+  activeWorkers: number
+  maxParallel: number
+  device: "PC" | "Termux"
+  mode: "low" | "medium" | "high"
   updatedAt: number
 }
 
@@ -75,8 +81,6 @@ export type ProjectResult = {
 
 export type ProgressCallback = (status: TeamStatus) => void | Promise<void>
 
-const MAX_PARALLEL_LEADS = 3
-const MAX_WORKERS_PER_LEAD = 7
 const MAX_WORKER_LINES = 50
 
 function safeSegment(value: string) {
@@ -165,11 +169,15 @@ export class CheckerAgent {
 }
 
 export class TeamLeadAgent {
-  constructor(private readonly ipcRoot: string) {}
+  constructor(
+    private readonly ipcRoot: string,
+    private readonly pool: DualWorkerPool,
+    private readonly maxWorkers: number,
+  ) {}
 
   private splitTasks(module: ModulePlan): WorkerTask[] {
     const sourceFiles = module.files.length > 0 ? module.files : [undefined]
-    return sourceFiles.slice(0, MAX_WORKERS_PER_LEAD).map((file, index) => ({
+    return sourceFiles.slice(0, this.maxWorkers).map((file, index) => ({
       id: `${module.id}-worker-${index + 1}`,
       task: `Inspect ${module.name}${file ? ` in ${basename(file)}` : ""}`,
       file,
@@ -180,15 +188,10 @@ export class TeamLeadAgent {
 
   async execute(module: ModulePlan): Promise<LeadResult> {
     const tasks = this.splitTasks(module)
-    const workers: WorkerResult[] = []
-    const checks: CheckerResult[] = []
     const worker = new WorkerAgent(this.ipcRoot)
     const checker = new CheckerAgent(this.ipcRoot)
-    for (const task of tasks) {
-      const result = await worker.execute(task)
-      workers.push(result)
-      checks.push(await checker.check(result))
-    }
+    const workers = await Promise.all(tasks.map((task) => this.pool.execute(() => worker.execute(task))))
+    const checks = await Promise.all(workers.map((result) => this.pool.execute(() => checker.check(result))))
     return {
       leadId: `lead-${module.id}`,
       module: module.name,
@@ -199,8 +202,27 @@ export class TeamLeadAgent {
   }
 }
 
+type StatusBase = Omit<TeamStatus, "activeWorkers" | "maxParallel" | "device" | "mode">
+
 export class ManagerAgent {
   readonly reader = new CodeReader()
+  private readonly smartManager: SmartManager
+
+  constructor(smartManager = new SmartManager()) {
+    this.smartManager = smartManager
+  }
+
+  get capacity() {
+    return this.smartManager.capacity
+  }
+
+  acknowledgement() {
+    return this.smartManager.acknowledgement(this.capacity)
+  }
+
+  async acceptTask(taskId: string, task: string, root: string) {
+    return this.smartManager.accept(taskId, task, root, this.capacity)
+  }
 
   async scanRepo(root: string): Promise<RepoStats> {
     const files = await this.reader.quickScan(root)
@@ -237,45 +259,90 @@ export class ManagerAgent {
     await onProgress?.(status)
   }
 
-  async runProject(task: string, root: string, options: { onProgress?: ProgressCallback; forceTeam?: boolean; forceSolo?: boolean } = {}): Promise<ProjectResult> {
-    const taskId = `task-${Date.now().toString(36)}-${randomUUID().slice(0, 6)}`
+  async runProject(task: string, root: string, options: { onProgress?: ProgressCallback; forceTeam?: boolean; forceSolo?: boolean; taskId?: string } = {}): Promise<ProjectResult> {
+    const taskId = options.taskId ?? `task-${Date.now().toString(36)}-${randomUUID().slice(0, 6)}`
     const ipcRoot = join("/tmp", "nexus", "teams", taskId)
     await mkdir(ipcRoot, { recursive: true })
-    const stats = await this.scanRepo(root)
-    const detectedSize = detectTaskSize(task, stats)
-    const size: TaskSize = options.forceSolo ? "small" : options.forceTeam && detectedSize === "small" ? "medium" : detectedSize
-    const modules = await this.createModules(task, stats)
-    const selectedModules = size === "medium" ? modules.slice(0, 1) : size === "large" ? modules : modules.slice(0, 1)
-    const totalWorkers = selectedModules.reduce((sum, module) => sum + Math.max(module.files.length, 1), 0)
-    await this.report(taskId, { taskId, status: size === "small" ? "Senior Dev solo mode" : "Manager assigned modules", progress: 10, modules: selectedModules.length, completedModules: 0, workers: totalWorkers, completedWorkers: 0, updatedAt: Date.now() }, options.onProgress)
+    const capacity = this.capacity
+    await this.smartManager.accept(taskId, task, root, capacity)
 
-    if (size === "small") {
-      return { taskId, size, stats, modules: selectedModules, leads: [], status: "completed", summary: `Small task detected (${stats.fileCount} files, ${stats.totalLines} lines); use SeniorDevAgent solo mode.` }
-    }
+    try {
+      const stats = await this.scanRepo(root)
+      const detectedSize = detectTaskSize(task, stats)
+      const size: TaskSize = options.forceSolo ? "small" : options.forceTeam && detectedSize === "small" ? "medium" : detectedSize
+      const modules = await this.createModules(task, stats)
+      const selectedModules = modules.slice(0, size === "large" ? capacity.leadCount : 1)
+      const totalWorkers = selectedModules.reduce((sum, module) => sum + Math.min(Math.max(module.files.length, 1), capacity.workersPerLead), 0)
+      const pool = new DualWorkerPool(capacity.maxParallel)
+      const status = (base: StatusBase): TeamStatus => ({
+        ...base,
+        activeWorkers: pool.activeWorkers,
+        maxParallel: capacity.maxParallel,
+        device: capacity.device,
+        mode: capacity.mode,
+      })
 
-    const leads: LeadResult[] = []
-    let completedModules = 0
-    let completedWorkers = 0
-    for (let i = 0; i < selectedModules.length; i += MAX_PARALLEL_LEADS) {
-      const batch = selectedModules.slice(i, i + MAX_PARALLEL_LEADS)
-      const batchResults = await Promise.all(batch.map((module) => new TeamLeadAgent(ipcRoot).execute(module)))
+      await this.report(taskId, status({
+        taskId,
+        status: size === "small" ? "Senior Dev solo mode" : `Manager assigned modules (${capacity.device} ${capacity.mode.toUpperCase()} mode)`,
+        progress: 10,
+        modules: selectedModules.length,
+        completedModules: 0,
+        workers: totalWorkers,
+        completedWorkers: 0,
+        updatedAt: Date.now(),
+      }), options.onProgress)
+
+      if (size === "small") {
+        await this.smartManager.update(taskId, "completed")
+        return { taskId, size, stats, modules: selectedModules, leads: [], status: "completed", summary: `Small task detected (${stats.fileCount} files, ${stats.totalLines} lines); use SeniorDevAgent solo mode.` }
+      }
+
+      await this.smartManager.update(taskId, "running")
+      const leads: LeadResult[] = []
+      let completedModules = 0
+      let completedWorkers = 0
+      const batchResults = await Promise.all(selectedModules.map((module) => new TeamLeadAgent(ipcRoot, pool, capacity.workersPerLead).execute(module)))
       for (const result of batchResults) {
         leads.push(result)
         completedModules += 1
         completedWorkers += result.workers.length
-        await this.report(taskId, { taskId, status: `Module ${completedModules}/${selectedModules.length} complete`, progress: Math.min(95, 10 + Math.round((completedModules / selectedModules.length) * 80)), modules: selectedModules.length, completedModules, workers: totalWorkers, completedWorkers, updatedAt: Date.now() }, options.onProgress)
+        await this.report(taskId, status({
+          taskId,
+          status: `Module ${completedModules}/${selectedModules.length} complete`,
+          progress: Math.min(95, 10 + Math.round((completedModules / selectedModules.length) * 80)),
+          modules: selectedModules.length,
+          completedModules,
+          workers: totalWorkers,
+          completedWorkers,
+          updatedAt: Date.now(),
+        }), options.onProgress)
       }
+
+      const resultStatus = leads.every((lead) => lead.status === "done") ? "completed" : "failed"
+      await this.report(taskId, status({
+        taskId,
+        status: resultStatus === "completed" ? "Completed" : "Needs review",
+        progress: 100,
+        modules: selectedModules.length,
+        completedModules,
+        workers: totalWorkers,
+        completedWorkers,
+        updatedAt: Date.now(),
+      }), options.onProgress)
+      await this.smartManager.update(taskId, resultStatus)
+      return { taskId, size, stats, modules: selectedModules, leads, status: resultStatus, summary: `${resultStatus === "completed" ? "Team workflow completed" : "Team workflow needs review"}: ${leads.length} team lead(s), ${completedWorkers} worker(s), and file-based IPC at ${ipcRoot}.` }
+    } catch (error) {
+      await this.smartManager.update(taskId, "failed", error instanceof Error ? error.message : String(error))
+      throw error
     }
-    const status = leads.every((lead) => lead.status === "done") ? "completed" : "failed"
-    await this.report(taskId, { taskId, status: status === "completed" ? "Completed" : "Needs review", progress: 100, modules: selectedModules.length, completedModules, workers: totalWorkers, completedWorkers, updatedAt: Date.now() }, options.onProgress)
-    return { taskId, size, stats, modules: selectedModules, leads, status, summary: `${status === "completed" ? "Team workflow completed" : "Team workflow needs review"}: ${leads.length} team lead(s), ${completedWorkers} worker(s), and file-based IPC at ${ipcRoot}.` }
   }
 }
 
 export class TeamHierarchy {
   readonly manager = new ManagerAgent()
 
-  async run(task: string, root: string, options: { onProgress?: ProgressCallback } = {}) {
+  async run(task: string, root: string, options: { onProgress?: ProgressCallback; taskId?: string } = {}) {
     return this.manager.runProject(task, root, options)
   }
 }

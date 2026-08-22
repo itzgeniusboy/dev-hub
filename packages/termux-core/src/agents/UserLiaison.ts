@@ -4,6 +4,7 @@ import { join } from "node:path"
 import { promisify } from "node:util"
 import { SeniorDevAgent } from "./SeniorDevAgent"
 import { ManagerAgent, type ProjectResult, type TeamStatus } from "./TeamHierarchy"
+import { SmartManager, type CapacityProbe } from "./SmartManager"
 
 const execFileAsync = promisify(execFile)
 
@@ -25,6 +26,7 @@ export type LiaisonOptions = {
   onUpdate?: (status: TaskStatus) => void | Promise<void>
   notify?: boolean
   background?: boolean
+  capacityProbe?: CapacityProbe
 }
 
 const statusRoot = join("/tmp", "nexus", "liaison")
@@ -37,7 +39,7 @@ export function classifyMessage(message: string): MessageType {
   if (/^(help|kya kar sakte|commands|menu)\b/.test(lower)) return "help"
   if (/^(galat|error|bug|sahi nahi|fail)\b/.test(lower)) return "complaint"
   if (/^(time|date|weather|joke|batao)\b/.test(lower)) return "small_talk"
-  const bigIndicators = ["refactor", "migrate", "rewrite", "architecture", "bot banao", "app banao", "repo", "project", "module"]
+  const bigIndicators = ["big task", "refactor", "migrate", "rewrite", "architecture", "bot banao", "app banao", "repo", "project", "module"]
   return bigIndicators.some((word) => lower.includes(word)) ? "big_task" : "small_task"
 }
 
@@ -54,7 +56,7 @@ export class UserLiaison {
   constructor(options: LiaisonOptions = {}) {
     this.options = options
     this.seniorDev = new SeniorDevAgent()
-    this.manager = new ManagerAgent()
+    this.manager = new ManagerAgent(new SmartManager(undefined, options.capacityProbe))
   }
 
   async handleUserMessage(message: string, userId = "local", root = "."): Promise<string> {
@@ -102,10 +104,12 @@ export class UserLiaison {
     const initial: TaskStatus = { taskId: id, userId, message, status: "Manager planning", progress: 5, startedAt: now, updatedAt: now }
     this.activeTasks.set(id, initial)
     await this.persist(initial)
-    const ack = `Samajh gaya. Bada task hai; Manager team workflow shuru kar raha hai.\nTask ID: ${id}\nProgress check karne ke liye 'status' likho.`
+    await this.manager.acceptTask(id, message, root)
+    const ack = `${this.manager.acknowledgement()}\nTask ID: ${id}\nProgress check karne ke liye 'status' likho.`
     const run = async () => {
       try {
         const result = await this.manager.runProject(message, root, {
+          taskId: id,
           onProgress: async (update) => {
             const status = this.fromTeamStatus(update, id, userId, message, now)
             await this.emit(status)

@@ -1,0 +1,101 @@
+import assert from "node:assert/strict"
+import { mkdtemp, readFile, rm } from "node:fs/promises"
+import { tmpdir } from "node:os"
+import { join } from "node:path"
+import test from "node:test"
+import { DualWorkerPool } from "./DualWorkerPool"
+import { PersistentTaskQueue, SmartManager, detectCapacity, formatDeviceMode } from "./SmartManager"
+import { UserLiaison } from "./UserLiaison"
+
+const GIB = 1024 * 1024 * 1024
+
+function meminfo(totalGiB: number, availableGiB: number) {
+  return `MemTotal:       ${totalGiB * 1024 * 1024} kB\nMemAvailable:   ${availableGiB * 1024 * 1024} kB\n`
+}
+
+test("detects a lightweight Termux plan with three total active slots", () => {
+  const plan = detectCapacity({
+    isTermux: true,
+    totalMemoryBytes: 2 * GIB,
+    processMemoryBytes: 180 * 1024 * 1024,
+    meminfo: meminfo(2, 1),
+  })
+  assert.deepEqual(
+    { device: plan.device, mode: plan.mode, maxParallel: plan.maxParallel, leadCount: plan.leadCount, workerTaskCount: plan.workerTaskCount },
+    { device: "Termux", mode: "low", maxParallel: 3, leadCount: 1, workerTaskCount: 2 },
+  )
+  assert.equal(formatDeviceMode(plan), "Device: Termux (2GB) → LOW mode")
+})
+
+test("detects a desktop high plan with twelve total active slots", () => {
+  const plan = detectCapacity({
+    isTermux: false,
+    totalMemoryBytes: 16 * GIB,
+    processMemoryBytes: 512 * 1024 * 1024,
+    meminfo: meminfo(16, 14),
+  })
+  assert.deepEqual(
+    { device: plan.device, mode: plan.mode, maxParallel: plan.maxParallel, leadCount: plan.leadCount, workerTaskCount: plan.workerTaskCount },
+    { device: "PC", mode: "high", maxParallel: 12, leadCount: 4, workerTaskCount: 12 },
+  )
+  assert.equal(formatDeviceMode(plan), "Device: PC (16GB) → HIGH mode")
+})
+
+test("DualWorkerPool accounts for every active slot and never exceeds its cap", async () => {
+  const pool = new DualWorkerPool(3)
+  let release: () => void = () => undefined
+  const gate = new Promise<void>((resolve) => { release = resolve })
+  const work = Array.from({ length: 6 }, () => pool.execute(async () => gate))
+  await Promise.resolve()
+  assert.deepEqual(pool.snapshot, { maxParallel: 3, activeWorkers: 3, pendingWorkers: 3 })
+  release()
+  await Promise.all(work)
+  assert.deepEqual(pool.snapshot, { maxParallel: 3, activeWorkers: 0, pendingWorkers: 0 })
+})
+
+test("persistent task records survive a new queue instance", async () => {
+  const root = await mkdtemp(join(tmpdir(), "nexus-smart-manager-"))
+  const path = join(root, "queue.json")
+  try {
+    const queue = new PersistentTaskQueue(path)
+    const manager = new SmartManager(queue)
+    const capacity = detectCapacity({ isTermux: true, totalMemoryBytes: 2 * GIB, processMemoryBytes: 0, meminfo: meminfo(2, 1) })
+    await manager.accept("task-1", "big task", root, capacity)
+    await manager.update("task-1", "running")
+    const reloaded = new PersistentTaskQueue(path)
+    const tasks = await reloaded.list()
+    assert.equal(tasks.length, 1)
+    assert.equal(tasks[0]?.state, "running")
+    const raw = JSON.parse(await readFile(path, "utf8")) as { version: number }
+    assert.equal(raw.version, 1)
+  } finally {
+    await rm(root, { recursive: true, force: true })
+  }
+})
+
+test("big task acknowledgement is immediate, reports capacity, and omits the retired waiting label", async () => {
+  const root = await mkdtemp(join(tmpdir(), "nexus-liaison-"))
+  const queuePath = join(root, "queue.json")
+  const previousPath = process.env.NEXUS_QUEUE_PATH
+  const previousTermux = process.env.TERMUX_VERSION
+  process.env.NEXUS_QUEUE_PATH = queuePath
+  process.env.TERMUX_VERSION = "0.118"
+  try {
+    const liaison = new UserLiaison({ background: true, notify: false })
+    const startedAt = Date.now()
+    const acknowledgement = await liaison.handleUserMessage("big task", "test", root)
+    assert.ok(Date.now() - startedAt < 250)
+    assert.match(acknowledgement, /Device: Termux .* mode/)
+    assert.match(acknowledgement, /max (3|6|12) active slot/)
+    assert.doesNotMatch(acknowledgement, /queued/i)
+    const persisted = JSON.parse(await readFile(queuePath, "utf8")) as { tasks: Array<{ id: string }> }
+    assert.equal(persisted.tasks.length, 1)
+    assert.match(acknowledgement, new RegExp(persisted.tasks[0]!.id))
+  } finally {
+    if (previousPath === undefined) delete process.env.NEXUS_QUEUE_PATH
+    else process.env.NEXUS_QUEUE_PATH = previousPath
+    if (previousTermux === undefined) delete process.env.TERMUX_VERSION
+    else process.env.TERMUX_VERSION = previousTermux
+    await rm(root, { recursive: true, force: true })
+  }
+})
