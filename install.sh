@@ -172,10 +172,13 @@ else
     fi
 
     if [ -z "$requested_version" ]; then
-        specific_version=$(curl -fsSL "https://api.github.com/repos/$REPO/releases/latest" | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p')
+        specific_version=$(curl -fsSL --retry 3 --connect-timeout 5 "https://api.github.com/repos/$REPO/releases/latest" | sed -n 's/.*"tag_name": *"v\([^"]*\)".*/\1/p')
         if [[ -z "$specific_version" ]]; then
-            echo -e "${RED}Failed to fetch the latest NEXUS version${NC}"
-            exit 1
+            specific_version=$(curl -fsSL --retry 3 --connect-timeout 5 "https://github.com/$REPO/releases.atom" | grep -o 'tag/v[0-9]*\.[0-9]*\.[0-9]*' | head -1 | sed 's/tag\/v//')
+            if [[ -z "$specific_version" ]]; then
+                echo -e "${RED}Failed to fetch the latest NEXUS version${NC}"
+                exit 1
+            fi
         fi
     else
         requested_version="${requested_version#v}"
@@ -191,6 +194,10 @@ else
 
     filename="$APP-$target-${specific_version}$archive_ext"
     url="https://github.com/$REPO/releases/download/v${specific_version}/$filename"
+    if ! curl -fsIL -o /dev/null "$url"; then
+        filename="$APP-$target$archive_ext"
+        url="https://github.com/$REPO/releases/download/v${specific_version}/$filename"
+    fi
 fi
 
 print_message() {
@@ -208,7 +215,7 @@ print_message() {
 
 check_version() {
     if command -v "$APP" >/dev/null 2>&1; then
-        installed_version=$("$APP" --version 2>/dev/null || echo "")
+        installed_version=$("$APP" --version 2>/dev/null | tr -d 'v' | awk '{print $1}' || echo "")
 
         if [[ "$installed_version" == "$specific_version" ]]; then
             # On Termux, ensure the wrapper has the LD_PRELOAD fix before skipping
@@ -285,8 +292,8 @@ download_and_install() {
     install_termux_runtime
     if [ "$is_termux" = "true" ]; then
         mv "$extracted_bin" "$INSTALL_DIR/nexus.bin"
-        cat > "$INSTALL_DIR/nexus" <<'EOF'
-#!/usr/bin/env bash
+        cat > "$INSTALL_DIR/nexus" <<EOF
+#!${PREFIX}/bin/bash
 set -e
 # Resolve nexus/nexus symlinks so the companion binary is found in the install directory.
 SOURCE="$0"
@@ -323,11 +330,11 @@ if [[ -z "$LOADER" ]]; then
     printf '%s\n' 'Install it with: pkg install glibc-repo glibc-runner' >&2
     exit 1
 fi
-LIBRARY_PATH="$GLIBC_PREFIX/lib"
-if [[ -d "$GLIBC_PREFIX/lib64" ]]; then
-    LIBRARY_PATH="$LIBRARY_PATH:$GLIBC_PREFIX/lib64"
+LIBRARY_PATH="\$GLIBC_PREFIX/lib"
+if [[ -d "\$GLIBC_PREFIX/lib64" ]]; then
+    LIBRARY_PATH="\$LIBRARY_PATH:\$GLIBC_PREFIX/lib64"
 fi
-exec "$LOADER" --library-path "$LIBRARY_PATH" "$SCRIPT_DIR/nexus.bin" "$@"
+exec "\$LOADER" --library-path "\$LIBRARY_PATH" "\$SCRIPT_DIR/nexus.bin" "\$@"
 EOF
         chmod 755 "$INSTALL_DIR/nexus.bin" "$INSTALL_DIR/nexus"
     else
@@ -339,8 +346,56 @@ EOF
 
 install_from_binary() {
     print_message info "\n${MUTED}Installing ${NC}NEXUS ${MUTED}from: ${NC}$binary_path"
-    cp "$binary_path" "${INSTALL_DIR}/nexus"
-    chmod 755 "${INSTALL_DIR}/nexus"
+    if [ "$is_termux" = "true" ]; then
+        install_termux_runtime
+        mv "$binary_path" "$INSTALL_DIR/nexus.bin"
+        cat > "$INSTALL_DIR/nexus" <<EOF
+#!${PREFIX}/bin/bash
+set -e
+# Resolve nexus/nexus symlinks so the companion binary is found in the install directory.
+SOURCE="\$0"
+while [[ -h "\$SOURCE" ]]; do
+    SOURCE_DIR="\$(CDPATH= cd -- "\$(dirname -- "\$SOURCE")" && pwd)"
+    SOURCE="\$(readlink "\$SOURCE")"
+    [[ "\$SOURCE" != /* ]] && SOURCE="\$SOURCE_DIR/\$SOURCE"
+done
+SCRIPT_DIR="\$(CDPATH= cd -- "\$(dirname -- "\$SOURCE")" && pwd)"
+unset LD_PRELOAD
+GLIBC_PREFIX="${PREFIX:-}/glibc"
+if [[ ! -d "\$GLIBC_PREFIX" ]]; then
+    printf '%s\n' 'NEXUS needs Termux glibc support. Install it with: pkg install glibc-repo glibc-runner' >&2
+    exit 1
+fi
+# NEXUS_TERMUX_DIRECT_LOADER_V3
+LOADER=""
+for candidate in \\
+    "\$GLIBC_PREFIX/bin/ld.so" \\
+    "\$GLIBC_PREFIX/lib/ld-linux-aarch64.so.1" \\
+    "\$GLIBC_PREFIX/lib/ld-linux-x86-64.so.2" \\
+    "\$GLIBC_PREFIX/lib64/ld-linux-aarch64.so.1" \\
+    "\$GLIBC_PREFIX/lib64/ld-linux-x86-64.so.2"; do
+    if [[ -f "\$candidate" && -x "\$candidate" ]]; then
+        LOADER="\$candidate"
+        break
+    fi
+done
+if [[ -z "\$LOADER" ]]; then
+    printf '%s\n' 'NEXUS could not find the Termux glibc dynamic loader.' >&2
+    printf '%s\n' "Expected: \$GLIBC_PREFIX/bin/ld.so or \$GLIBC_PREFIX/lib/ld-linux-*" >&2
+    printf '%s\n' 'Install it with: pkg install glibc-repo glibc-runner' >&2
+    exit 1
+fi
+LIBRARY_PATH="\$GLIBC_PREFIX/lib"
+if [[ -d "\$GLIBC_PREFIX/lib64" ]]; then
+    LIBRARY_PATH="\$LIBRARY_PATH:\$GLIBC_PREFIX/lib64"
+fi
+exec "\$LOADER" --library-path "\$LIBRARY_PATH" "\$SCRIPT_DIR/nexus.bin" "\$@"
+EOF
+        chmod 755 "$INSTALL_DIR/nexus.bin" "$INSTALL_DIR/nexus"
+    else
+        cp "$binary_path" "${INSTALL_DIR}/nexus"
+        chmod 755 "${INSTALL_DIR}/nexus"
+    fi
 }
 
 if [ -n "$binary_path" ]; then
@@ -434,7 +489,7 @@ install_command_alias() {
             continue
         fi
         if [[ -n "$path_dir" && -d "$path_dir" && -w "$path_dir" ]]; then
-            if [[ -e "$path_dir/nexus" || -L "$path_dir/nexus" || -e "$path_dir/nexus" || -L "$path_dir/nexus" ]]; then
+            if [[ -e "$path_dir/nexus" || -L "$path_dir/nexus" ]]; then
                 alias_dirs+=("$path_dir")
             fi
         fi
