@@ -15,6 +15,13 @@ export async function runBareUserTask(args: string[], dependencies: {
 } = {}) {
   const { UserLiaison } = await import("@nexus/termux-core")
   const liaison = dependencies.liaison ?? new UserLiaison()
-  const response = await liaison.handleUserMessage(args.join(" "), "local", process.cwd())
-  ;(dependencies.write ?? process.stdout.write.bind(process.stdout))(response + EOL)
+  const write = dependencies.write ?? process.stdout.write.bind(process.stdout)
+  try {
+    const response = await liaison.handleUserMessage(args.join(" "), "local", process.cwd())
+    write(response + EOL)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error)
+    process.stderr.write(`❌ Task failed: ${message}${EOL}`)
+    process.exitCode = 1
+  }
 }

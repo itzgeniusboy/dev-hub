@@ -39,3 +39,28 @@ test("bare task acknowledgements expose simulated desktop High and Termux Low ca
     await rm(root, { recursive: true, force: true })
   }
 })
+
+test("bare task failures exit non-zero with a clean message instead of leaking internals", async () => {
+  const failingLiaison = {
+    handleUserMessage: async () => {
+      throw new Error("EROFS: read-only file system, mkdir '/tmp'")
+    },
+  } as unknown as UserLiaison
+  const previousExitCode = process.exitCode
+  const errors: string[] = []
+  const originalStderrWrite = process.stderr.write.bind(process.stderr)
+  process.stderr.write = ((text: string) => {
+    errors.push(String(text))
+    return true
+  }) as typeof process.stderr.write
+  try {
+    await runBareUserTask(["big task"], { liaison: failingLiaison })
+    assert.equal(process.exitCode, 1)
+    assert.match(errors.join(""), /Task failed: EROFS/)
+    assert.doesNotMatch(errors.join(""), /async function/)
+  } finally {
+    process.stderr.write = originalStderrWrite
+    if (previousExitCode === undefined) process.exitCode = 0
+    else process.exitCode = previousExitCode
+  }
+})

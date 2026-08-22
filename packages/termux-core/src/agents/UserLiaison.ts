@@ -66,7 +66,7 @@ export class UserLiaison {
     const type = classifyMessage(message)
     switch (type) {
       case "greeting":
-        return "Bolo bhai! Kya kaam hai? Help ke liye 'help' likho."
+        return "Hello! What would you like to automate? Type 'help' for options."
       case "small_talk":
         return this.handleSmallTalk(message)
       case "help":
@@ -90,7 +90,7 @@ export class UserLiaison {
     if (lower.includes("date")) return `Date: ${new Date().toLocaleDateString()}`
     if (lower.includes("weather")) return "Weather lookup needs a configured weather provider."
     if (lower.includes("joke")) return "Bug report: the code worked once, so we called it production-ready."
-    return "Main ready hoon. 'help' likho ya koi task bhejo."
+    return "Ready to help. Type 'help' or send a task."
   }
 
   private async executeSmallTask(message: string, root: string, userId: string) {
@@ -108,7 +108,7 @@ export class UserLiaison {
     this.activeTasks.set(id, initial)
     await this.persist(initial)
     await this.manager.acceptTask(id, message, root)
-    const ack = `${this.manager.acknowledgement()}\nTask ID: ${id}\nProgress check karne ke liye 'status' likho.`
+    const ack = `${this.manager.acknowledgement()}\nTask ID: ${id}\nType 'status' to check progress.`
     const run = async () => {
       try {
         const result = await this.manager.runProject(message, root, {
@@ -156,7 +156,7 @@ export class UserLiaison {
 
   private getActiveTaskStatus(userId: string) {
     const tasks = [...this.activeTasks.values()].filter((task) => task.userId === userId && task.status !== "Complete" && task.status !== "Failed")
-    if (tasks.length === 0) return "Sab kaam complete hai. Kuch aur bolo."
+    if (tasks.length === 0) return "All tasks are complete. Send another task any time."
     return ["Active tasks:", ...tasks.map((task) => `${this.progressBar(task.progress)} ${task.taskId} — ${task.status} (${task.progress}%)`)].join("\n")
   }
 
